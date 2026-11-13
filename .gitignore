@@ -147,3 +147,9 @@ vite.config.ts.timestamp-*
 
 # Turbo Repo
 .turbo
+
+# csv
+.csv
+
+# Python virtual environment
+.venv/
