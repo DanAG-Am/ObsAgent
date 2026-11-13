@@ -153,3 +153,5 @@ vite.config.ts.timestamp-*
 
 # Python virtual environment
 .venv/
+chroma_data/
+*csv
