@@ -82,5 +82,31 @@ that count. You can also confirm that the persisted files exist:
 du -sh ChromaDB/chroma_data
 ```
 
+## Precomputed analytical queries
+
+`precomputed_queries.py` materializes the source collection into
+`base_cards_sintetica_aggregates`, grouped by vintage, MOB, product, channel,
+strategy, strategy segment, age band, and score band. The query functions then
+apply validated ChromaDB metadata filters and calculate KPIs deterministically.
+
+Run this from the repository root after ingestion:
+
+```bash
+ChromaDB/.venv/bin/python - <<'PY'
+from ChromaDB.precomputed_queries import (
+    build_aggregate_collection,
+    open_collections,
+)
+
+source, aggregates = open_collections()
+print("aggregate rows:", build_aggregate_collection(source, aggregates))
+PY
+```
+
+The language model should call `portfolio_kpis`, `cohort_curve`,
+`vintage_comparison`, `kpis_by_dimension`, `segment_ranking`, or
+`anomaly_candidates` with validated parameters. It must not construct
+arbitrary ChromaDB filters or SQL.
+
 To confirm retrieval as well as storage, rerun the ingestion command and check
 that its output includes `Collection count: 1,089,833` and a `Results:` section.

@@ -42,11 +42,28 @@ def ingest_csv(collection: chromadb.Collection) -> int:
             embeddings = [hashed_embedding(document) for document in documents]
             metadatas = [
                 {
-                    "vintage": row["VINTAGE"],
+                    "vintage": int(row["VINTAGE"]),
+                    "strategy": row["STRATEGY"],
+                    "strategy_segment": row["STRATEGY_SEGMENT"],
                     "product": row["PRODUCT"],
                     "channel": row["CHANNEL"],
                     "age_tag": row["AGE_TAG"],
                     "score_tag": row["SCORE_TAG"],
+                    "mob": int(row["MOB"]),
+                    "accounts": int(row["ACCOUNTS"]),
+                    "credit_lines_amount": float(row["CREDITLINESAMTS"]),
+                    "enrolled_accounts": int(row["ENRACCTS"]),
+                    "over30_accounts": int(row["OVER30ACCTS"]),
+                    "over30_amount": float(row["OVER30AMTS"]),
+                    "gross_chargeoff_amount": float(row["GCLAMTS"]),
+                    "net_chargeoff_amount": float(row["NCLAMTS"]),
+                    "recovery_amount": float(row["RECOVERYAMTS"]),
+                    "enrolled_amount": float(row["ENRAMTS"]),
+                    "revenue": float(row["REVENUE"]),
+                    "acquisition_expense": float(row["EXPENSES_ACQ"]),
+                    "variable_ecm_expense": float(row["EXPENSES_ECM_VAR"]),
+                    "fixed_ecm_expense": float(row["EXPENSES_ECM_FIX"]),
+                    "total_expense": float(row["EXPENSES_TOTAL"]),
                 }
                 for row in rows
             ]
