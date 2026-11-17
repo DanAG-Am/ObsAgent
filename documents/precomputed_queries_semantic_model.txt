@@ -1,0 +1,469 @@
+ObsAgent - Precomputed Queries and Semantic Model
+==================================================
+
+Purpose
+-------
+
+This document defines the first analytical contract between the ObsAgent
+language model and the portfolio dataset. The model chooses an approved
+business question, metric, grouping, and validated filters. Deterministic
+query tools calculate the result. The model does not write arbitrary SQL and
+does not calculate financial ratios from raw rows.
+
+Source
+------
+
+Primary dataset:
+  database/base_cards_sintetica.csv
+
+The PRD requires:
+  - automated dataset validation and profiling;
+  - deterministic aggregation and metric calculation;
+  - vintage/MOB cohort analysis;
+  - period comparison, anomaly detection, and narrative generation;
+  - the LLM to see calculated aggregates instead of the complete CSV.
+
+Important source-data note:
+  AGE_TAG and SCORE_TAG are categorical labels in the current CSV. Examples
+  include "01| Young < 25" and "151-160". They must not be treated as numeric
+  values until a normalization rule is explicitly defined.
+
+
+1. Process for creating precomputed queries
+--------------------------------------------
+
+Step 1 - Register and validate the source
+
+  1. Register the source, load timestamp, row count, and schema version.
+  2. Confirm required columns and compatible data types.
+  3. Validate delimiters, encoding, duplicate rows, nulls, invalid numbers,
+     negative values, and invalid VINTAGE/MOB values.
+  4. Record rejected rows and validation warnings.
+  5. Do not publish an analytical snapshot when required validation fails.
+
+Step 2 - Normalize dimensions
+
+Create canonical values for:
+  - VINTAGE: integer YYYYMM, with a derived date if needed.
+  - MOB: non-negative integer.
+  - PRODUCT: trimmed, case-normalized label.
+  - CHANNEL: trimmed, case-normalized label.
+  - STRATEGY: trimmed, case-normalized label.
+  - STRATEGY_SEGMENT: trimmed, case-normalized label.
+  - AGE_TAG: canonical categorical label and optional parsed lower/upper age.
+  - SCORE_TAG: canonical categorical label and optional parsed lower/upper score.
+
+Never silently merge two source labels. Store the source value and the
+canonical value, and report unmapped values.
+
+Step 3 - Build an additive aggregate layer
+
+Materialize one row per:
+
+  VINTAGE
+  STRATEGY
+  STRATEGY_SEGMENT
+  PRODUCT
+  CHANNEL
+  AGE_TAG
+  SCORE_TAG
+  MOB
+
+Store only additive measures in this layer:
+
+  ACCOUNTS
+  CREDITLINESAMTS
+  ENRACCTS
+  OVER30ACCTS
+  OVER30AMTS
+  GCLAMTS
+  NCLAMTS
+  RECOVERYAMTS
+  ENRAMTS
+  REVENUE
+  EXPENSES_ACQ
+  EXPENSES_ECM_VAR
+  EXPENSES_ECM_FIX
+  EXPENSES_TOTAL
+
+If EXPENSES_TOTAL is not guaranteed to equal the sum of its components,
+preserve the source value and expose the reconciliation difference.
+
+Step 4 - Define metric policies
+
+Ratios are calculated as ratios of sums:
+
+  SUM(numerator) / NULLIF(SUM(denominator), 0)
+
+Never average ratios calculated per source row or per segment.
+
+The denominator policy for gross charge-off must be configured by the business:
+  - proposed default: SUM(GCLAMTS) / SUM(ENRAMTS)
+  - alternative policy: SUM(GCLAMTS) / SUM(CREDITLINESAMTS)
+
+The selected policy must be returned as metadata with every result.
+
+Step 5 - Publish approved query templates
+
+Each query template must have:
+  - a stable query/tool name;
+  - an input schema;
+  - an allowlist of dimensions and metrics;
+  - validated filter values from the data catalog;
+  - a maximum result size;
+  - numerator and denominator columns for every ratio;
+  - source snapshot ID and refresh timestamp;
+  - warnings for empty results, zero denominators, and small populations.
+
+Step 6 - Test against expected examples
+
+For each template, create hand-checked cases covering:
+  - one vintage and one MOB;
+  - multiple vintages;
+  - a dimension comparison;
+  - zero denominators;
+  - empty filters;
+  - small populations;
+  - categorical AGE_TAG and SCORE_TAG values.
+
+Verify both the values and the query intent selected by the agent.
+
+Step 7 - Generate narrative only after verification
+
+The tool returns verified aggregates and comparison values. A separate
+verification step checks every number inserted into the narrative. Critical
+anomalies or low-confidence results are marked for human review.
+
+
+2. Business questions for the agent
+------------------------------------
+
+The agent should classify a user request into one of these approved questions.
+If the request does not fit, it should ask for clarification instead of
+inventing a metric or query.
+
+A. Portfolio overview
+
+  Q01. What is the current portfolio performance for the selected filters?
+  Q02. How many accounts, credit lines, and enrolled accounts are included?
+  Q03. What are the enrolled amount, revenue, total expenses, and operating
+       margin?
+  Q04. What are the delinquency, charge-off, recovery, utilization, and
+       efficiency rates?
+
+B. Cohort and vintage analysis
+
+  Q05. How does delinquency evolve by vintage and MOB?
+  Q06. How do gross/net charge-offs and recoveries evolve by vintage and MOB?
+  Q07. How does utilization evolve by vintage and MOB?
+  Q08. Which vintage has the best or worst performance at a selected MOB?
+  Q09. How does one vintage compare with another at the same MOB?
+
+C. Dimension comparisons
+
+  Q10. Which product has the highest or lowest selected metric?
+  Q11. Which channel has the highest or lowest selected metric?
+  Q12. Which strategy or strategy segment has the highest or lowest selected
+       metric?
+  Q13. How do age bands or score bands differ in risk and profitability?
+  Q14. Where is delinquency or charge-off concentrated?
+
+D. Profitability and unit economics
+
+  Q15. Which segment has the best or worst operating margin?
+  Q16. Which segment has the best or worst efficiency ratio?
+  Q17. What is the acquisition cost per account by product or channel?
+  Q18. What are revenue and margin per account?
+
+E. Trends and anomalies
+
+  Q19. Is delinquency increasing or decreasing over time?
+  Q20. Are charge-offs, recoveries, utilization, or margin changing materially?
+  Q21. Which segment is an anomaly relative to its peer groups?
+  Q22. Which result requires human review because of severity, low volume, or
+       low data quality?
+
+F. Data confidence
+
+  Q23. What is the dataset coverage by vintage and MOB?
+  Q24. Are there missing, duplicated, null, or invalid records?
+  Q25. Which categorical values are available for a requested filter?
+  Q26. When was the analytical snapshot refreshed and what validation warnings
+       exist?
+
+
+3. Semantic model
+-----------------
+
+3.1 Entity: PortfolioObservation
+
+Grain:
+  One row per combination of the seven dimensions plus VINTAGE and MOB.
+
+Dimensions:
+
+  vintage
+    Source: VINTAGE
+    Type: integer YYYYMM
+    Meaning: origination/cohort month.
+
+  mob
+    Source: MOB
+    Type: non-negative integer
+    Meaning: months on book for the cohort.
+
+  strategy
+    Source: STRATEGY
+    Type: categorical string
+
+  strategy_segment
+    Source: STRATEGY_SEGMENT
+    Type: categorical string
+
+  product
+    Source: PRODUCT
+    Type: categorical string
+
+  channel
+    Source: CHANNEL
+    Type: categorical string
+
+  age_band
+    Source: AGE_TAG
+    Type: categorical string
+    Note: do not infer numeric ordering without normalization.
+
+  score_band
+    Source: SCORE_TAG
+    Type: categorical string
+    Note: do not infer numeric ordering without normalization.
+
+Measures:
+
+  accounts
+    Source: ACCOUNTS
+    Additive count of accounts.
+
+  credit_lines_amount
+    Source: CREDITLINESAMTS
+    Additive credit-line amount.
+
+  enrolled_accounts
+    Source: ENRACCTS
+    Additive count of enrolled accounts.
+
+  over30_accounts
+    Source: OVER30ACCTS
+    Additive count of accounts over 30 days delinquent.
+
+  over30_amount
+    Source: OVER30AMTS
+    Additive amount over 30 days delinquent.
+
+  enrolled_amount
+    Source: ENRAMTS
+    Additive enrolled amount.
+
+  gross_chargeoff_amount
+    Source: GCLAMTS
+    Additive gross charge-off amount.
+
+  net_chargeoff_amount
+    Source: NCLAMTS
+    Additive net charge-off amount.
+
+  recovery_amount
+    Source: RECOVERYAMTS
+    Additive recovery amount.
+
+  revenue
+    Source: REVENUE
+    Additive revenue.
+
+  acquisition_expense
+    Source: EXPENSES_ACQ
+    Additive acquisition expense.
+
+  variable_ecm_expense
+    Source: EXPENSES_ECM_VAR
+    Additive variable ECM expense.
+
+  fixed_ecm_expense
+    Source: EXPENSES_ECM_FIX
+    Additive fixed ECM expense.
+
+  total_expense
+    Source: EXPENSES_TOTAL
+    Additive total expense.
+
+
+3.2 Derived metrics
+
+All derived metrics must expose numerator, denominator, formula version, and
+zero-denominator behavior.
+
+delinquency_rate_amount:
+  SUM(over30_amount) / NULLIF(SUM(enrolled_amount), 0)
+
+delinquency_rate_accounts:
+  SUM(over30_accounts) / NULLIF(SUM(enrolled_accounts), 0)
+
+gross_chargeoff_rate:
+  SUM(gross_chargeoff_amount) / NULLIF(SUM(enrolled_amount), 0)
+  Denominator is configurable by business policy.
+
+net_chargeoff_rate:
+  SUM(net_chargeoff_amount) / NULLIF(SUM(enrolled_amount), 0)
+
+recovery_rate:
+  SUM(recovery_amount) / NULLIF(SUM(gross_chargeoff_amount), 0)
+
+utilization_rate:
+  SUM(enrolled_amount) / NULLIF(SUM(credit_lines_amount), 0)
+
+operating_margin:
+  SUM(revenue) - SUM(total_expense)
+
+operating_margin_rate:
+  (SUM(revenue) - SUM(total_expense)) / NULLIF(SUM(revenue), 0)
+
+efficiency_ratio:
+  SUM(total_expense) / NULLIF(SUM(revenue), 0)
+
+acquisition_cost_per_account:
+  SUM(acquisition_expense) / NULLIF(SUM(accounts), 0)
+
+revenue_per_account:
+  SUM(revenue) / NULLIF(SUM(accounts), 0)
+
+margin_per_account:
+  (SUM(revenue) - SUM(total_expense)) / NULLIF(SUM(accounts), 0)
+
+
+3.3 Relationships and valid groupings
+
+PortfolioObservation can be filtered or grouped by:
+
+  vintage
+  mob
+  strategy
+  strategy_segment
+  product
+  channel
+  age_band
+  score_band
+
+Recommended grouping rules:
+
+  - Cohort curves require vintage and MOB.
+  - Vintage comparisons require vintage and a common MOB.
+  - Dimension rankings require one grouping dimension and optional filters.
+  - Portfolio snapshots have no grouping dimension.
+  - Trend queries require an ordered time dimension, normally vintage.
+  - Age and score bands are categorical unless parsed mappings are approved.
+
+
+4. Tool/query contract
+----------------------
+
+The agent should call tools with structures like these, not with SQL text.
+
+portfolio_kpis:
+  {
+    "filters": {
+      "vintage": {"from": 202401, "to": 202412},
+      "mob": {"from": 0, "to": 12},
+      "product": ["Clasica"],
+      "channel": ["Aeropuerto"],
+      "strategy": [],
+      "strategy_segment": [],
+      "age_band": [],
+      "score_band": []
+    }
+  }
+
+kpis_by_dimension:
+  {
+    "group_by": "channel",
+    "metric_set": [
+      "delinquency_rate_amount",
+      "operating_margin",
+      "efficiency_ratio"
+    ],
+    "filters": {}
+  }
+
+cohort_curve:
+  {
+    "metric_set": ["delinquency_rate_amount", "recovery_rate"],
+    "vintages": [202401, 202402, 202403],
+    "mob": {"from": 0, "to": 12},
+    "filters": {}
+  }
+
+segment_ranking:
+  {
+    "group_by": "strategy_segment",
+    "metric": "operating_margin_rate",
+    "direction": "desc",
+    "limit": 10,
+    "minimum_accounts": 1000,
+    "filters": {}
+  }
+
+anomaly_candidates:
+  {
+    "metric": "delinquency_rate_amount",
+    "group_by": "channel",
+    "method": "iqr",
+    "minimum_accounts": 1000,
+    "filters": {}
+  }
+
+The API response should include:
+  - query/tool name;
+  - normalized filters;
+  - result rows;
+  - metric definitions;
+  - numerator and denominator fields;
+  - snapshot ID and refreshed-at timestamp;
+  - warnings;
+  - data-quality status.
+
+
+5. Agent behavior rules
+-----------------------
+
+The agent must:
+
+  1. Ask a clarification question when the requested metric, denominator,
+     grouping, time period, or comparison baseline is missing.
+  2. Use only catalog values for dimensions.
+  3. Never invent a product, channel, vintage, MOB, age band, or score band.
+  4. Never write arbitrary SQL.
+  5. Never calculate ratios from displayed rows.
+  6. State when a denominator is zero or a result is empty.
+  7. State the minimum-volume warning for small populations.
+  8. Distinguish amount-based delinquency from account-based delinquency.
+  9. Include the snapshot timestamp in report outputs.
+  10. Hand off critical anomalies and low-confidence results for human review.
+
+
+6. Initial implementation priority
+-----------------------------------
+
+Implement in this order:
+
+  1. Dataset profile and validation
+  2. Additive aggregate snapshot
+  3. portfolio_kpis
+  4. kpis_by_dimension
+  5. cohort_curve
+  6. vintage_comparison
+  7. segment_ranking
+  8. anomaly_candidates
+  9. drill-down query
+  10. narrative and number verification
+
+This order ensures that every later agent capability is backed by validated,
+reproducible, and explainable calculations.
