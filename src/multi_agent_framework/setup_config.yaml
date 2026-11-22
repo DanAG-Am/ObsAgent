@@ -1,0 +1,188 @@
+# ObsAgent Multi-Agent Configuration
+
+This configuration sets up the multi-agent system for ObsAgent.
+
+## Architecture Overview
+
+The multi-agent system implements three specialized agents working in sequence:
+
+1. **Researcher Agent** - Consults ChromaDB and performs analysis
+2. **Translator Agent** - Translates queries to English, returns results to source language  
+3. **Builder Agent** - Generates HTML reports and downloadable outputs
+
+## Setup Instructions
+
+### 1. Install Dependencies
+
+Create a requirements file:
+
+```bash
+cat > requirements-MA-framework.txt << 'EOF'
+chromadb>=0.4.0
+ollama[py-cudf]>=0.1.0
+pandas>=2.0.0
+numpy>=1.24.0
+tiktoken>=0.5.0
+pydantic>=2.0.0
+aiosqlite>=0.19.0
+EOF
+
+pip install -r requirements-MA-framework.txt
+```
+
+### 2. Initialize ChromaDB Segmented Collections
+
+```bash
+cd /Users/dany/Desktop/ObsAgent/ObsAgent/ChromaDB
+
+# Create segmented collections
+python3 << 'SETUP'
+import chromadb
+
+base_path = "chroma_data"
+client = chromadb.PersistentClient(base_path)
+
+# Create collection for vintages
+if not client.get_collection("aggregates_vintage_lowercase"):
+    collection = client.create_collection(
+        name="aggregates_vintage_lowercase",
+        metadata={"description": "Vintage temporal segmentation"}
+    )
+    print("Created: aggregates_vintage_lowercase")
+
+# Create collection for strategy segments  
+if not client.get_collection("aggregates_strategy_segment_lowercase"):
+    collection = client.create_collection(
+        name="aggregates_strategy_segment_lowercase",
+        metadata={"description": "Strategy segment breakdown"}
+    )
+    print("Created: aggregates_strategy_segment_lowercase")
+
+# Create collection for products
+if not client.get_collection("aggregates_product_lowercase"):
+    collection = client.create_collection(
+        name="aggregates_product_lowercase",
+        metadata={"description": "Product line analysis"}
+    )
+    print("Created: aggregates_product_lowercase")
+
+# Create collection for channels
+if not client.get_collection("aggregates_channel_lowercase"):
+    collection = client.create_collection(
+        name="aggregates_channel_lowercase",
+        metadata={"description": "Channel distribution"}
+    )
+    print("Created: aggregates_channel_lowercase")
+
+print("\nAll segmented collections initialized!")
+SETUP
+```
+
+### 3. Precompute Aggregates
+
+```bash
+python3 << 'PRECOMPUTE'
+import pandas as pd
+import chromadb
+from pathlib import Path
+
+base_path = "/Users/dany/Desktop/ObsAgent/ObsAgent/ChromaDB/chroma_data"
+source_file = "base_cards_sintetica.csv"
+aggregation_dir = Path(base_path) / "precomputed_aggregates"
+
+# Load source data
+print(f"Loading {source_file}...")
+df = pd.read_csv(source_file)
+
+# Precompute aggregates by category dimension
+categories = ['vintage', 'strategy_segment', 'product']
+
+for cat in categories:
+    agg_df = df.groupby(cat).size().reset_index(name=f'{cat}_count')
+    agg_df[f'{cat}_sum'] = agg_df[f'{cat}_count'].sum()
+    
+    # Upsert to ChromaDB
+    client = chromadb.PersistentClient(base_path)
+    coll_name = f"aggregates_{cat}_lowercase"
+    
+    if not client.get_collection(coll_name):
+        coll = client.create_collection(
+            name=coll_name,
+            metadata={"description": f"{cat.capitalize()} aggregation"}
+        )
+        coll.upsert(
+            documents=[f"{cat} aggregated by row"],
+            embeddings=[[0.5]*64 for _ in range(len(agg_df))],  # placeholder
+            metadatas=[{cat: str(cat)}] * len(agg_df)
+        )
+        print(f"Created {len(agg_df)} aggregates for {cat}")
+    else:
+        client.get_collection(coll_name).upsert(..., documents=f"{cat} aggregated")
+
+print("Precomputed aggregates complete!")
+PRECOMPUTE
+```
+
+### 4. Verify Multi-Agent Setup
+
+```bash
+python3 << 'VERIFY'
+import sys
+sys.path.insert(0, "/Users/dany/Desktop/ObsAgent/ObsAgent/src/multi_agent_framework")
+
+from agent_manager import AgentRole, ResearcherAgent, TranslatorAgent, BuilderAgent
+
+# Register agents by role
+system = type('obj', (object,), {
+    '_agents': {},
+    'register_agent': lambda r, a: setattr(type('', (), {})(), '_', r),
+    '__init__': lambda self: None
+})()
+
+print("Multi-Agent Framework Setup Verification:")
+print("=" * 50)
+print(f"Agent roles defined: {[ar.name for ar in AgentRole]}")
+print(f"\nResearcher agent tools: {len(ResearcherAgent('Researcher').tools)}")
+print(f"Translator agent tools: {len(TranslatorAgent('Translator').tools)}")
+print(f"Builder agent tools: {len(BuilderAgent('Builder').tools)}")
+
+print("\nSetup complete! Agents ready for use.")
+VERIFY
+```
+
+## Integration Example
+
+```python
+# Usage in ObsAgent dashboard or reports generation
+
+import asyncio
+from obs_agent.query_service import QueryService, KPIType
+
+async def generate_analytics_report():
+    """Generate analytics report using multi-agent system."""
+    
+    # Initialize query service
+    qs = QueryService()
+    
+    # Get top vintages by strategy
+    rankings = await qs.get_vintage_ranking(
+        KPIType.DELINQUENCY_RATE, 
+        top_n=5
+    )
+    
+    # Compare two vintages  
+    comparison = await qs.compare_vintages(2017, 2018)
+    
+    return {
+        'rankings': rankings,
+        'comparison': comparison
+    }
+```
+
+## Next Steps
+
+1. Implement actual ChromaDB connection and query methods
+2. Add translation layer for Spanish→English→Spanish flow  
+3. Connect to existing ObsAgent HTML report generation
+4. Set up segmentation collections with real aggregate data
+5. Integrate with dashboard building capabilities
