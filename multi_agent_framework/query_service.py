@@ -243,11 +243,6 @@ class KPIType(Enum):
     UTILIZATION_RATE = "utilization_rate"
     OPERATING_MARGIN = "operating_margin"
 
-
-# =============================================================================
-# Helper Functions
-# =============================================================================
-
 def get_query_service() -> QueryService:
     """Get singleton instance of query service."""
     return QueryService()
@@ -318,11 +313,6 @@ async def demo():
         print(f"Demo error (expected): {e}\n")
     
     print("=== Demo Complete ===")
-
-
-# =============================================================================
-# Export functions for easy import
-# =============================================================================
 
 __all__ = [
     'QueryService',

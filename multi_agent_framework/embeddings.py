@@ -52,11 +52,6 @@ DIMENSIONS = {
     "score_tag": 6,
 }
 
-
-# =============================================================================
-# Embedding Generation Functions
-# =============================================================================
-
 def generate_category_embedding(category: str) -> list[float]:
     """
     Generate a deterministic embedding for a category dimension.
@@ -118,11 +113,6 @@ def generate_aggregate_embedding(category: str, filters: dict[str, Any]) -> list
     
     return [val / sum(x**2 for x in final_embedding) if final_embedding else 0.0 
              for val in final_embedding]
-
-
-# =============================================================================
-# Collection Management Functions
-# =============================================================================
 
 def initialize_segmented_collections(
     base_path: str = "ChromaDB/chroma_data"
@@ -261,11 +251,6 @@ def get_collection_info(category: str) -> dict[str, Any]:
             "message": f"Collection '{category}' not found"
         }
 
-
-# =============================================================================
-# Query Functions
-# =============================================================================
-
 def query_segmented_collection(
     category: str,
     query_text: str,
@@ -360,11 +345,6 @@ def search_by_dimension(
         "ranked_items": [r["metadata"] for r in results.get("results", [])] if results else []
     }
 
-
-# =============================================================================
-# Aggregation Materialization Functions
-# =============================================================================
-
 def materialize_aggregates_for_category(
     category: str,
     base_path: str = "ChromaDB/chroma_data"
@@ -434,11 +414,6 @@ def compute_aggregates_for_category(
     # Simplified aggregation logic - would use pandas or similar
     return 1
 
-
-# =============================================================================
-# Utility Functions
-# =============================================================================
-
 def get_default_base_path() -> str:
     """Get default ChromaDB path for ObsAgent."""
     import os
@@ -489,11 +464,6 @@ def collection_exists(category: str) -> bool:
         return collection_name in collections
     except Exception:
         return False
-
-
-# =============================================================================
-# Main entry point for testing
-# =============================================================================
 
 def demo():
     """Demonstrate embedding segmentation functionality."""

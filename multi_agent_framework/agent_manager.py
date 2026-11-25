@@ -165,11 +165,6 @@ class BaseAgent:
         """Register a tool for this agent."""
         self.tools.append(tool)
 
-
-# =============================================================================
-# Researcher Agent - Consults ChromaDB and performs analysis
-# =============================================================================
-
 class ResearcherAgent(BaseAgent):
     """
     The researcher agent consults the database to answer data-based questions.
@@ -401,9 +396,7 @@ Remember: Output must be actionable, well-formatted, and ready for use."""
         return "<html><body><h1>Analysis Report</h1></body></html>"
 
 
-# =============================================================================
-# Workflow Orchestration
-# =============================================================================
+# ============================================================================
 
 async def run_multi_agent_workflow(query: str, source_language: str = "es") -> Any:
     """
@@ -464,11 +457,6 @@ async def _orchestrate(
         "builder_output": builder_output
     }
 
-
-# =============================================================================
-# Setup and Registration
-# =============================================================================
-
 def setup_multi_agent_system() -> MultiAgentSystem:
     """
     Set up the complete multi-agent system with default agents.
@@ -491,10 +479,6 @@ def setup_multi_agent_system() -> MultiAgentSystem:
     # Register default agents (already created in __init__)
     return system
 
-
-# =============================================================================
-# Main entry point for testing/demo
-# =============================================================================
 
 async def demo():
     """Demonstrate the multi-agent workflow."""
