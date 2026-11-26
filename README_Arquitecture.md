@@ -1,318 +1,117 @@
-# ObsAgent Multi-Agent Configuration Guide
+# ObsAgent architecture
 
-## Overview
+ObsAgent combines a Streamlit frontend, local ChromaDB collections, and an
+Ollama-backed three-agent pipeline. For installation and end-to-end startup,
+see [set_up.md](./set_up.md).
 
-This document outlines the multi-agent architecture for ObsAgent, adapting patterns from agenticai while leveraging ChromaDB with semantic segmentation by category.
+## Application flow
 
-### Architecture Summary
+```text
+Streamlit chat
+    │ user question + recent chat messages
+    ▼
+Translator ── translated request ──► Researcher
+                                        │
+                                        ├─ validated analytical tools
+                                        ├─ ChromaDB aggregate collection
+                                        └─ evidence and summary
+                                               │
+                                               ▼
+                                      Builder ──► response
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    OBSAGENT MULTI-AGENT SYSTEM               │
-└─────────────────────────────────────────────────────────────┘
-
-           ┌──────────────┐     ┌──────────────┐     ┌──────────────┐
-           │    TRANSLATOR│      │ RESEARCHER  │      │    BUILDER   │
-           │             │      │              │      │            │
-           │ • Spanish    │      │ • ChromaDB   │      │ • Reports   │
-           │   → English  │      │   Query      │      │ • Dashboards│
-           │             │      │   Analysis    │      │ • Output   │
-           └──────┬───────┘      └─────────────┘      └──────┬───────┘
-                  │                                      │
-                  │              (context shared)          │
-                  │◄──────────────────────────────────────►│
-                  │              ←→                         │
-                    └───────────────────────────────────────┘
+Streamlit dashboard ──► QueryService ──► deterministic KPI functions
 ```
 
-## Agent Roles
+### Translator
 
-### 1. Researcher Agent (`ResearcherAgent`)
+`TranslatorAgent` sends the request to Ollama and asks it to translate the
+request into English while preserving metrics, years, filters, and identifiers.
+The model is told to leave already-English requests unchanged.
 
-**Primary Responsibility:** Consult ChromaDB and perform analysis
+### Researcher
 
-**Tools:**
-- `query_aggregates`: Fetch precomputed aggregates from ChromaDB
-- `calculate_metrics`: Calculate KPIs from raw data  
-- `compare_vintage`: Compare two vintages side-by-side
+`ResearcherAgent` runs a bounded tool-calling loop. The model chooses among
+registered tools, but Python runs their handlers. The handlers call the
+validated analytical functions in `ChromaDB/precomputed_queries.py`; model
+output is not used as a KPI calculation or arbitrary database query.
 
-**Integration Points:**
-- Directly interfaces with segmented ChromaDB collections
-- Supports all default metrics: delinquency_rate, chargeoff_rate, recovery_rate, etc.
-- Operates on precomputed aggregates materialized by category
+The registered tools are:
 
-### 2. Translator Agent (`TranslatorAgent`)
+| Tool | Purpose |
+|---|---|
+| `portfolio_kpis` | Portfolio measures and derived KPIs, with optional filters. |
+| `cohort_curve` | KPI results grouped by vintage and month-on-book. |
+| `kpis_by_dimension` | KPI results grouped by a supported dimension. |
+| `vintage_comparison` | Compare two vintages at the same MOB. |
+| `segment_ranking` | Rank groups by a supported metric. |
+| `anomaly_candidates` | Find IQR-based outliers for a metric and dimension. |
 
-**Primary Responsibility:** Language translation layer
+`MAX_ITERATIONS` limits the tool-call loop. Individual and cumulative tool
+results are bounded to control how much data is sent back to the model.
 
-**Tools:**
-- `translate_query`: Convert user input to English (if needed)
-- `translate_response`: Present findings back in source language
+### Builder
 
-**Integration Points:**
-- Translates queries before researcher processes them
-- Converts analysis results for human consumption
-- Bridges gap between user intent and machine analysis
+`BuilderAgent` receives the original request, the Researcher's response, and
+the tool results. It writes the final response in the original language and is
+instructed not to add unsupported facts or numbers.
 
-### 3. Builder Agent (`BuilderAgent`)
+Each agent makes its own Ollama call. The pipeline passes the request and
+results between stages; it does not share one model conversation object across
+the three agents.
 
-**Primary Responsibility:** Generate output
+## Data flow and responsibilities
 
-**Tools:**
-- `generate_report`: Create HTML reports from findings
-- `create_dashboard_spec`: Generate dashboard specifications
-- `export_data`: Export data to various formats
+Two persistent collections are required in `ChromaDB/chroma_data/`:
 
-**Integration Points:**
-- Receives structured analysis from researcher agent
-- Generates formatted, actionable output for consumption
+- `base_cards_sintetica`: source records ingested from the CSV.
+- `base_cards_sintetica_aggregates`: records materialized for deterministic
+  KPI and analytical queries.
 
-## Multi-Agent Workflow
+The source ingestion and aggregation logic is in `ChromaDB/ingest_csv.py` and
+`ChromaDB/precomputed_queries.py`. The language model selects tools and
+summarizes evidence; Python validates filters and calculates metrics.
 
-### Query Flow
+The Streamlit app has two paths:
 
-```
-User Question (Spanish)
-       │
-       ▼
-┌─────┴─────┐
-│ Translator │
-│   Agent    │
-└─────┬─────┘
-       │
-       ├─► Translates to: "What are top vintages by strategy?"
-       │
-       ▼
-┌─────┴─────┐
-│ Researcher │
-│    Agent   │
-│     Tool   │
-└─────┬─────┘
-       │
-       ├─► Query aggregates from ChromaDB
-       │    by category dimension
-       │
-       ▼
-┌─────┴─────┐
-│ Researcher │
-│     Return │
-└─────┬─────┘
-       │
-       │◄─── Returns findings (English)
-       │
-       ▼
-┌─────┴─────┐
-│ Translator │
-│    Agent   │
-└─────┬─────┘
-       │
-       ├─► Translates to Spanish
-       │
-       ▼
-┌─────┴─────┐
-│ Builder    │
-│    Agent   │
-│     Tool   │
-└─────┬─────┘
-       │
-       └─► Returns HTML report / CSV
-```
+- **Ask ObsAgent** runs Translator → Researcher → Builder. It sends up to eight
+  recent chat messages with the next user prompt so that follow-up answers can
+  use recent context.
+- **Portfolio dashboard** calls `QueryService` for KPIs and vintage rankings.
+  Those deterministic calls do not require Ollama.
 
-## ChromaDB Segmentation Strategy
+The chat is stored in Streamlit session state, not in ChromaDB or another
+persistent conversation store.
 
-### Collections Structure
+## Main implementation files
 
-Each category dimension gets its own persistent collection:
+| File | Responsibility |
+|---|---|
+| `streamlit_app.py` | Chat UI, dashboard controls, and Streamlit session history. |
+| `multi_agent_framework/agent_manager.py` | Agent roles, prompts, tool schemas, handlers, and orchestration. |
+| `multi_agent_framework/query_service.py` | Direct async access to KPI, ranking, comparison, and semantic query methods. |
+| `multi_agent_framework/agentlib/ollama.py` | Ollama HTTP client and model/endpoint configuration. |
+| `ChromaDB/ingest_csv.py` | CSV ingestion into the source collection. |
+| `ChromaDB/precomputed_queries.py` | Aggregates, filter validation, and deterministic analysis functions. |
 
-| Collection Name | Description | Dimension |
-|-----------------|-------------|-----------|
-| `aggregates_vintage_lowercase` | Vintage temporal segmentation | 0 |
-| `aggregates_strategy_segment_lowercase` | Strategy segment breakdown | 1 |
-| `aggregates_product_lowercase` | Product line analysis | 2 |
-| `aggregates_channel_lowercase` | Channel distribution | 3 |
-| `aggregates_age_tag_lowercase` | Age cohort segmentation | 4 |
-| `aggregates_score_tag_lowercase` | Score-based segmentation | 5 |
+## Extending the system
 
-### Embedding Dimensions
+To change how an agent reasons or communicates, edit its system prompt in
+`multi_agent_framework/agent_manager.py`. In particular, to ask the user a
+clarifying question instead of assuming missing input:
 
-Each dimension vector uses 64 dimensions:
+1. Add a Researcher instruction that identifies required details, asks one
+   concise question when they are unclear, and avoids making tool calls until
+   the user answers.
+2. Update the Builder instruction to preserve the clarification question.
+3. Keep the Streamlit chat-history window large enough for the user response
+   and the prior question to be included in the next request.
 
-```python
-embedding_vector = [f0, f1, f2, ..., f63]
-```
+To add data-analysis capability, first implement a validated Python function
+in `ChromaDB/precomputed_queries.py`. Then import and register it in
+`ResearcherAgent._build_tools` with a JSON schema, handler, and prompt guidance.
+Expose it in `QueryService` or `streamlit_app.py` only if direct API or dashboard
+access is also needed. Do not give the model arbitrary SQL or direct
+unrestricted ChromaDB access.
 
-Where each component is normalized and derived from:
-- Category name hash (60%)
-- Filter criteria hash (40%)
-
-### Materialization Flow
-
-```
-CSV Data (base_cards_sintetica.csv)
-        │
-        ▼
-Precompute Aggregates
-└─────────────┬──────────┐
-              │          │
-              ▼          │
-    ┌─────────────────────┤
-    │ Group by Dimension  │
-    ├─► Vintage           │ (dim: vintage year)
-    ├─► Strategy Segment │
-    ├─► Product          │
-    └─► Channel          │
-                          │
-                          ▼
-                   ChromaDB Collection
-                    (Persistent)
-```
-
-## Integration with Existing ObsAgent
-
-### File Locations
-
-| Module | Path | Purpose |
-|--------|------|---------|
-| Agent Manager | `src/multi_agent_framework/agent_manager.py` | Core agent orchestration |
-| Embeddings | `src/multi_agent_framework/embeddings.py` | ChromaDB operations & segmentation |
-| Query Service | `src/multi_agent_framework/query_service.py` | High-level query interface |
-
-### Configuration Files
-
-| File | Purpose |
-|------|---------|
-| `ChromaDB/README.md` | Existing setup guidance |
-| `setup_multi_agent_config.yaml` | Multi-agent configuration (new) |
-
-### ChromaDB Setup Integration
-
-The multi-agent system integrates with ObsAgent's existing ChromaDB:
-
-```python
-# Read from existing source
-from obs_agent import QueryService
-
-qs = QueryService()
-# Uses same base path as existing chroma_data.py
-qs._base_path = "ChromaDB/chroma_data"
-
-# Precomputed aggregates available via segmented collections
-aggregates_collection = qs._system._embedding_collections['vintage']
-```
-
-## Usage Examples
-
-### Basic Query Flow
-
-```python
-import asyncio
-from obs_agent import run_multi_agent_workflow
-
-async def example():
-    # Spanish query through full pipeline
-    results = await run_multi_agent_workflow(
-        "¿Cuáles son las principales vintages por estrategia?"
-    )
-    
-    # Extract findings from researcher agent
-    findings = results['research_findings']
-    
-    # Format output with builder if needed
-    html_report = format_output(findings)
-```
-
-### KPI Queries
-
-```python
-from obs_agent import QueryService, KPIType
-
-qs = QueryService()
-
-# Query delinquency rate for specific vintage
-rankings = await qs.get_vintage_ranking(
-    KPIType.DELINQUENCY_RATE,
-    top_n=5
-)
-
-# Compare two vintages
-comparison = await qs.compare_vintages(2017, 2018)
-```
-
-### Category-Segmented Query
-
-```python
-async def segment_query():
-    # Query segmented by product category
-    results = await run_multi_agent_workflow(
-        "Mejores productos por rendimiento", 
-        category='product'
-    )
-    
-    # Or use high-level query
-    top_products = await qs.get_vintage_ranking(
-        metric='revenue',
-        group_by='product',
-        n_results=10
-    )
-```
-
-## Configuration Options
-
-### Setup Configuration
-
-Create `setup_multi_agent_config.yaml`:
-
-```yaml
-multi_agent:
-  agents:
-    translator:
-      model: "llama3-8b"  # or your choice
-      language_pairs:
-        - es→en
-        - es→es
-    
-    researcher:
-      model: "llama3-8b"
-      kpis: ["delinquency_rate", "recovery_rate"]
-      
-    builder:
-      model: "llama3-8b"
-      output_formats:
-        - html
-        - csv
-        - excel
-
-chroma_db:
-  path: "ChromaDB/chroma_data"
-  source_collection: "base_cards_sintetica"
-  
-  collections:
-    - vintage
-    - strategy_segment
-    - product
-    - channel
-    - age_tag
-    - score_tag
-  
-embedding:
-  dimension: 64
-  batch_size: 5000
-
-workflow:
-  agent_sequence: [translator, researcher, builder]
-  max_iterations: 10
-```
-
-## Next Steps
-
-1. **Implement actual ChromaDB integration** in `embeddings.py`
-2. **Create concrete tool implementations** for each agent
-3. **Add unit tests** for multi-agent interactions
-4. **Integrate with existing ObsAgent dashboard generation**
-5. **Set up CI/CD pipeline** for multi-agent system
-
-## References
-
-- Agenticai patterns: `/agenticai/src/nas_agente/agentes.py`
-- ChromaDB setup: `/ObsAgent/ChromaDB/README.md`
-- Precomputed queries: `/ObsAgent/ChromaDB/precomputed_queries.py`
+For runnable commands, requirements, data expectations, Ollama setup, and
+custom agent registration, see [set_up.md](./set_up.md).
