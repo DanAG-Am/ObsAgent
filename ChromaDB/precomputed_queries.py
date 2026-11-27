@@ -169,13 +169,36 @@ def _where(filters: dict[str, Any] | None) -> dict[str, Any] | None:
     return clauses[0] if len(clauses) == 1 else {"$and": clauses}
 
 
+
 def _rows(
     aggregates: chromadb.Collection,
     filters: dict[str, Any] | None = None,
+    batch_size: int = 500,
 ) -> list[dict[str, Any]]:
-    result = aggregates.get(where=_where(filters), include=["metadatas"])
-    return result.get("metadatas") or []
+    """Retrieve matching aggregate records in bounded batches."""
+    where = _where(filters)
+    rows: list[dict[str, Any]] = []
+    offset = 0
 
+    while True:
+        result = aggregates.get(
+            where=where,
+            limit=batch_size,
+            offset=offset,
+            include=["metadatas"],
+        )
+
+        batch = result.get("metadatas") or []
+        if not batch:
+            break
+
+        rows.extend(batch)
+        offset += len(batch)
+
+        if len(batch) < batch_size:
+            break
+
+    return rows
 
 def _ratio(numerator: float, denominator: float) -> float | None:
     return numerator / denominator if denominator else None

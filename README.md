@@ -7,9 +7,9 @@ aggregates.
 
 ## What the app does
 
-- **Ask ObsAgent:** submit questions in the chat interface. A Translator,
-  Researcher, and Builder handle the request in sequence.
-- **Portfolio dashboard:** view a selected KPI and rank vintages using the
+- **Ask ObsAgent:** submit questions in Spanish. A Translator, Researcher, and
+  Builder handle the request in Spanish in sequence.
+- **Portfolio dashboard:** view a selected KPI and rank cosechas using the
   local aggregate collection. These dashboard queries use deterministic Python
   calculations; they do not call Ollama.
 - **Validated analysis:** the model can call only the analytics tools exposed
@@ -34,19 +34,18 @@ directory, set `OBSAGENT_CHROMA_PATH` or change the directory in the sidebar.
 
 ## Frontend appearance
 
-The Streamlit theme in `.streamlit/config.toml` uses the ObsAgent palette from
-`visual-identity/VISUAL_IDENTITY.md`. The header styling and page layout are in
-`streamlit_app.py`. Update those files to adjust colors, typography, and layout;
-the theme uses Streamlit's sans-serif font rather than requiring external fonts.
-Run Streamlit from the project root so it loads the project theme.
+The Streamlit interface and agent responses are in Spanish. Its header combines
+the ObsAgent palette from `visual-identity/VISUAL_IDENTITY.md` with Banamex
+brand accents; the header styling, logo treatment, and page layout are in
+`streamlit_app.py`.
 
 ## Agent responsibilities
 
 | Agent | Responsibility | Main code |
 |---|---|---|
-| Translator | Rewrites the user's request in English while preserving metrics, filters, and identifiers. | `TranslatorAgent.execute` in `multi_agent_framework/agent_manager.py` |
-| Researcher | Selects analytical tools, gathers evidence, and summarizes results without inventing numbers. | `ResearcherAgent` in `multi_agent_framework/agent_manager.py` |
-| Builder | Presents the evidence-based response in the original language. | `BuilderAgent.execute` in `multi_agent_framework/agent_manager.py` |
+| Translator | Normalizes the user's request in Spanish while preserving its intent, filters, and identifiers. | `TranslatorAgent.execute` in `multi_agent_framework/agent_manager.py` |
+| Researcher | Selects analytical tools, gathers evidence, and summarizes results in Spanish without inventing numbers. | `ResearcherAgent` in `multi_agent_framework/agent_manager.py` |
+| Builder | Presents the evidence-based response in Spanish. | `BuilderAgent.execute` in `multi_agent_framework/agent_manager.py` |
 
 The workflow is a pipeline: only the previous agent's output and the query
 context are handed to the next agent. The Streamlit chat keeps recent messages
