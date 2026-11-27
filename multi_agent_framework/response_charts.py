@@ -12,7 +12,7 @@ DIMENSION_LABELS = {
     "product": "Producto",
     "channel": "Canal",
     "age_tag": "Etiqueta de edad",
-    "score_tag": "Etiqueta de score",
+    "score_tag": "Grupo de puntuación",
     "mob": "Mes en libros (MOB)",
 }
 

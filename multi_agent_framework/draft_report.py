@@ -27,7 +27,7 @@ if FONT_NAME not in pdfmetrics.getRegisteredFontNames():
 
 
 def build_draft_pdf(question: str, answer: str, trace: dict[str, Any]) -> bytes:
-    """Create a test draft; no claim in it is marked as verified or approved."""
+    """Create a test draft; no claim in it is marked as verified."""
     sections = [
         ("Pregunta", question),
         ("Respuesta del agente", answer),
@@ -38,9 +38,7 @@ def build_draft_pdf(question: str, answer: str, trace: dict[str, Any]) -> bytes:
     ]
     warning = (
         "BORRADOR DE PRUEBA - NO VERIFICADO. "
-        "Los datos y las conclusiones requieren revisión humana. "
-        "No se ha verificado la identidad ni la fecha de actualización del snapshot. "
-        "No distribuir como reporte aprobado."
+        "Los datos y las conclusiones no se han verificado automáticamente."
     )
     font = pdfmetrics.getFont(FONT_NAME)
     supported = font.face.charWidths

@@ -15,14 +15,13 @@ recommendations to the named recipient.
 Request clarification if any required input is absent:
 
 1. one or more verified metric results;
-2. period and snapshot context;
+2. period and source context;
 3. recipient (`executive`, `board`, `risk_analyst`, `operations`,
    `regulator`, or `general`);
 4. report objective or decision to support;
 5. filters and segment context;
 6. comparisons and anomalies already calculated;
-7. human-review requirements and warnings;
-8. snapshot ID and refreshed-at timestamp.
+7. warnings.
 
 Never accept a metric, change, trend, anomaly, threshold, or denominator that
 was not returned by a query or calculation skill.
@@ -68,8 +67,7 @@ Create the explanation in this order:
 6. **Decision implication**
    Describe what a recipient should examine or decide.
 7. **Confidence and controls**
-   Include denominator, volume, data-quality, threshold, snapshot, and
-   human-review context.
+   Include denominator, volume, data-quality, and threshold context.
 
 Skip a section only when no verified input exists for it. Do not substitute a
 zero or `N/A` for missing content.
@@ -133,7 +131,7 @@ Use verified anomaly objects:
 - state observed value and peer baseline;
 - report z-score, IQR fences, or regulatory status only for applied methods;
 - distinguish an operational candidate from a confirmed breach;
-- include severity and human-review status;
+- include severity and warnings;
 - do not describe a statistical anomaly as misconduct, fraud, or a claims
   breach unless the corresponding approved metric and evidence support it.
 
@@ -188,8 +186,7 @@ Name the segment and period, state the deviation, and identify a permitted
 verification action:
 
 - "Review the segment's denominator and volume";
-- "Validate source coverage";
-- "Escalate for approved human review".
+- "Validate source coverage".
 
 Do not infer root causes or assign blame.
 
@@ -223,7 +220,7 @@ Recommendations must be proportionate to evidence:
 - for normal results: no special action;
 - for a low-confidence or volume-limited result: validate coverage;
 - for a medium or high statistical anomaly: investigate peer comparability;
-- for a critical anomaly or regulatory breach: escalate for human review;
+- for a critical anomaly or regulatory breach: report its evidence and limitations;
 - for unsupported fraud or claims metrics: report unavailable and do not
   recommend enforcement action.
 
@@ -252,10 +249,7 @@ Return the narrative and machine-readable metadata:
   ],
   "recommendations": ["review-oriented action"],
   "confidence": "high | medium | low",
-  "warnings": [],
-  "human_review_required": false,
-  "snapshot_id": "snapshot identifier",
-  "refreshed_at": "ISO-8601 timestamp"
+  "warnings": []
 }
 ```
 
@@ -295,5 +289,5 @@ Before returning the narrative, verify that:
 8. volume and data-quality warnings are included;
 9. the recipient tone is consistent;
 10. recommendations match the evidence;
-11. snapshot ID and refresh time are present;
+11. source limitations and warnings are present;
 12. no placeholder, example, or invented number remains.

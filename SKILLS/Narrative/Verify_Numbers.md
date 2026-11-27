@@ -17,10 +17,8 @@ appears in the original source text.
 - period-comparison objects;
 - anomaly objects;
 - highlighted-finding objects;
-- human-review object;
 - metric definitions and formula versions;
 - numerator and denominator fields;
-- snapshot ID and refreshed-at timestamp;
 - approved display and rounding policy.
 
 No numeric claim may be marked as verified without all applicable source
@@ -53,8 +51,7 @@ Use only these source types, in descending precedence:
 1. verified query/tool output;
 2. approved period-comparison object;
 3. approved anomaly object;
-4. highlighted-finding evidence;
-5. human-review review metadata.
+4. highlighted-finding evidence.
 
 When sources conflict, mark the narrative number `unverified` and do not
 choose a value by preference or majority. Return the conflicting source
@@ -80,7 +77,6 @@ For each numeric claim, identify:
 - group or segment;
 - numerator and denominator;
 - unit;
-- source snapshot;
 - source field;
 - rounding or formatting applied.
 
@@ -89,7 +85,6 @@ A match requires:
 - the same metric and unit;
 - the same period and segment;
 - the same filters and MOB range;
-- the same snapshot ID;
 - a source value equal within the approved rounding tolerance.
 
 If no approved rounding policy exists, apply these defaults only for display:
@@ -274,7 +269,7 @@ Overall report status:
 
 - `passed`: every numeric claim is verified or rounded-match;
 - `failed`: one or more mismatches or unsupported claims;
-- `unavailable`: source objects or snapshot metadata are incomplete;
+- `unavailable`: source objects are incomplete;
 
 Never collapse `failed` and `unavailable` together.
 
@@ -285,8 +280,6 @@ Return a machine-readable verification object:
 ```json
 {
   "status": "passed | failed | unavailable",
-  "snapshot_id": "snapshot identifier",
-  "refreshed_at": "ISO-8601 timestamp",
   "verified_claim_count": 0,
   "failed_claim_count": 0,
   "claims": [
@@ -297,15 +290,13 @@ Return a machine-readable verification object:
       "value": 0,
       "unit": "percent | percentage_points | currency | count | ratio",
       "source_field": "object.field",
-      "source_snapshot_id": "snapshot identifier",
       "status": "verified | rounded_match | unverified | mismatched | missing_source | unsupported_claim",
       "expected_value": 0,
       "differences": []
     }
   ],
   "failed_checks": [],
-  "warnings": [],
-  "human_review_required": false
+  "warnings": []
 }
 ```
 
@@ -317,21 +308,18 @@ traceable to source data.
 
 When verification fails:
 
-1. do not publish or describe the report as approved;
+1. do not describe the report as verified;
 2. return the exact mismatched text;
 3. identify source field and expected value;
 4. mark `status = failed`;
-5. set `human_review_required = true`;
-6. send failures to `Human_Review_Flag`;
-7. require the narrative to be corrected or held;
-8. rerun verification after any draft change.
+5. require the narrative to be corrected or held;
+6. rerun verification after any draft change.
 
 If sources are unavailable:
 
 1. set `status = unavailable`;
-2. set `human_review_required = true`;
-3. do not invent or estimate values;
-4. do not allow publication as a verified report.
+2. do not invent or estimate values;
+3. do not describe the report as verified.
 
 ## Safeguards: correction loop
 
@@ -341,8 +329,6 @@ After a mismatch:
 - do not alter the metric or baseline silently;
 - preserve period and segment context;
 - rerun extraction and matching;
-- rerun human-review trigger evaluation;
-- update the snapshot and verification timestamp;
 - retain a record of prior failed text and correction.
 
 A corrected draft is not passed until all claims are verified again.
@@ -375,8 +361,6 @@ Before returning verification:
 5. every anomaly value traces to a source object;
 6. every threshold has jurisdiction and source metadata;
 7. every failed value includes an expected source field;
-8. snapshot IDs and refresh timestamps match;
-9. rounded values have an approved display tolerance;
-10. failed claims trigger human review;
-11. unavailable source triggers human review;
-12. no source-derived result was modified in place.
+8. rounded values have an approved display tolerance;
+9. failed claims and unavailable sources remain clearly marked;
+10. no source-derived result was modified in place.

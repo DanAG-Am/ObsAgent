@@ -1,7 +1,29 @@
 [theme]
 base = "light"
 primaryColor = "#C90037"
-backgroundColor = "#F4F7F6"
+backgroundColor = "#F4F7FB"
 secondaryBackgroundColor = "#FFFFFF"
-textColor = "#0B2030"
-font = "sans serif"
+textColor = "#102A43"
+linkColor = "#005A9C"
+borderColor = "#CCD9E7"
+font = "sans-serif"
+headingFont = "sans-serif"
+headingFontSizes = ["2.6rem", "2rem", "1.5rem", "1.2rem", "1rem", "0.875rem"]
+headingFontWeights = [700, 700, 700, 700, 600, 600]
+metricValueFontSize = "2rem"
+metricValueFontWeight = 700
+baseRadius = "12px"
+buttonRadius = "8px"
+showWidgetBorder = true
+chartCategoricalColors = ["#005A9C", "#C90037", "#007D87", "#657B98", "#744595", "#B85F22"]
+dataframeHeaderBackgroundColor = "#E8F0F8"
+dataframeHeaderTextColor = "#102A43"
+dataframeBorderColor = "#CCD9E7"
+
+[theme.sidebar]
+backgroundColor = "#EAF1F8"
+secondaryBackgroundColor = "#FFFFFF"
+textColor = "#102A43"
+borderColor = "#CCD9E7"
+primaryColor = "#C90037"
+linkColor = "#005A9C"

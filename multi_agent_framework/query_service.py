@@ -11,7 +11,9 @@ from ChromaDB.ingest_csv import hashed_embedding
 from ChromaDB.precomputed_queries import (
     DEFAULT_METRICS,
     cohort_curve,
+    dashboard_dimension_values,
     kpis_by_dimension,
+    portfolio_alerts,
     portfolio_kpis,
     segment_ranking,
     vintage_comparison,
@@ -48,8 +50,8 @@ class QueryService:
         self._chroma_path = Path(path)
         self._system = setup_multi_agent_system(self._chroma_path)
 
-    async def query(self, request: str, *, translate: bool = False) -> dict[str, Any]:
-        return await self._system.execute(request, translate=translate)
+    async def query(self, request: str) -> dict[str, Any]:
+        return await self._system.execute(request)
 
     def available_tools(self) -> list[dict[str, str]]:
         return [
@@ -98,8 +100,20 @@ class QueryService:
             descending,
         )
 
-    async def get_dashboard_cohorts(self) -> list[dict[str, Any]]:
-        return await asyncio.to_thread(cohort_curve, self._system.aggregates)
+    async def get_dashboard_cohorts(
+        self, filters: dict[str, Any] | None = None,
+    ) -> list[dict[str, Any]]:
+        return await asyncio.to_thread(cohort_curve, self._system.aggregates, filters)
+
+    async def get_dashboard_dimensions(self) -> dict[str, list[str]]:
+        return await asyncio.to_thread(dashboard_dimension_values, self._system.aggregates)
+
+    async def get_portfolio_alerts(
+        self, group_by: str, metric: str, filters: dict[str, Any], minimum_accounts: int,
+    ) -> dict[str, Any]:
+        return await asyncio.to_thread(
+            portfolio_alerts, self._system.aggregates, group_by, metric, filters, minimum_accounts
+        )
 
     async def search_semantically(
         self,

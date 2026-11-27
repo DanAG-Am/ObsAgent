@@ -9,6 +9,10 @@ been run as part of this documentation change.
 - Python 3.12 is recommended.
 - Ollama installed and available on the machine or network.
 - The source CSV at `database/base_cards_sintetica.csv`.
+- The variable dictionary at
+  `database/Base Cards para TEC - Diccionario de Variables.csv`. Git ignores
+  CSV files; copy it to each deployment separately using an authorized channel.
+  Without it, chat continues with a visible warning and definitions are unavailable.
 - Enough local disk space for ChromaDB. The full source collection may require
   several gigabytes.
 
@@ -169,21 +173,46 @@ ChromaDB/.venv/bin/streamlit run streamlit_app.py
 Open the local URL printed by Streamlit in your browser. The workspace includes
 an overview and the following views:
 
-- **Ask ObsAgent:** sends the request directly to the Researcher, which calls
-  validated tools and returns an evidence-backed answer. Grouped results can
-  also appear as a chart. Ollama must be running for this tab.
+- **Ask ObsAgent:** sends the request through the Researcher and Builder. The
+  Researcher calls validated tools; the Builder drafts the answer. Grouped results can
+  also appear as a chart. Each answer has local PDF and Excel draft downloads.
+  Ollama must be running for this tab.
 - **Portfolio dashboard:** calculates KPIs and vintage rankings directly from
   the aggregates. These calculations are deterministic, do not call Ollama,
-  and only run while the dashboard tab is selected.
+  and only run while the dashboard tab is selected. An Excel draft contains the
+  selected summary, evolution, displayed ranking, and their editable charts,
+  with their filter scopes. The interactive comparison is not exported.
+  Product, channel and strategy filters apply across panel results; select at
+  least two vintages for the same-MOB comparator. The data-quality expander
+  reports observed internal MOB gaps and offers a user-defined minimum at a
+  single MOB; it can also run a separate, potentially slow CSV check.
+  Questions can also be asked below the panel's KPI cards; these call Ollama with the selected
+  KPI, filters, comparison, ranking and quality summaries. Evolution points are
+  fetched through tools as needed.
+- **Fraude (demo):** displays invented transactions and incident counts with
+  IQR outliers, independent of the portfolio data. This is not validated fraud
+  detection, a fraud probability, or evidence of real fraud. Its separate chat
+  sends the synthetic view and question to the configured Ollama endpoint.
+  Open the tab directly or use the shortcut at the top of the portfolio panel.
 - **Cómo funciona:** lists the registered tools and explains the current
   limitations. The agent can consult allowlisted `SKILLS/` guides using
   `consultar_skill`. Reading a guide does not execute the documented procedure;
   the model may also choose not to call it. Guide content is sent to the
-  configured Ollama endpoint, which may be remote. The storage guide is empty.
+  configured Ollama endpoint, which may be remote.
+- **Evaluación sintética:** the button explicitly runs two cases against the configured model using invented
+  data and a synthetic dictionary, never the portfolio collection. It checks
+  evidence and the presence of expected numbers, not answer semantics.
 
-The sidebar offers optional translation of a request to Spanish before analysis.
-This adds a model call. Expand the trace under an answer to see whether
-translation ran and which tools, arguments, results, or errors were returned.
+Expand the trace under an answer to see the tools, arguments, results, or errors
+returned and, for panel questions, the view context used. Dictionary context is sent
+to the configured Ollama endpoint; verify that endpoint before using it.
+
+The local CSV validation tool checks structure and three source-dictionary
+reconciliations using an internal absolute tolerance of 0.01 for amounts, not a
+regulatory threshold. It checks identical full rows and internal MOB gaps in
+observed ranges, not business-key duplicates, expected coverage or minimum
+population, and cannot establish that the CSV matches the database. Exports
+remain unverified drafts. No email or external report distribution is configured.
 
 By default, the app reads `ChromaDB/chroma_data`. To select a different
 ChromaDB directory, set `OBSAGENT_CHROMA_PATH` before starting Streamlit or
@@ -197,10 +226,13 @@ The roles and default prompts are in
 
 | Stage | Agent | What it does |
 |---|---|---|
-| Default | Researcher | Uses an Ollama tool-calling loop to choose from registered analytics tools and returns a concise Spanish summary with evidence. |
+| 1 | Orchestrator | Coordinates the stages in Python without an extra model call. |
+| 2 | Researcher | Uses an Ollama tool-calling loop to gather evidence. |
+| 3 | Builder | Uses the question and evidence to draft the Spanish response. |
 
-Translator and Builder remain available for custom workflows, but the default
-app skips their extra model calls.
+The Builder adds a model call and can increase latency. There is no translation stage.
+Python integrations must no longer pass `translate` to `query` or `execute`;
+`TranslatorAgent` is no longer exported.
 
 Available Researcher tools:
 
@@ -210,6 +242,7 @@ Available Researcher tools:
 - `vintage_comparison`: compares two vintages at the same MOB.
 - `segment_ranking`: ranks groups by a supported metric.
 - `anomaly_candidates`: flags statistical outliers by a supported dimension.
+- `analizar_fraude_simulado`: analyzes fixed invented counts, not real fraud.
 
 These call validated functions in `ChromaDB/precomputed_queries.py`. Python
 code, not the language model, performs the calculations. The Researcher's tool
@@ -230,12 +263,12 @@ Specify:
 4. That it must not guess when the user has not supplied the required
    information.
 
-For a custom workflow that uses the Builder, adjust its instructions in
+Adjust the Builder's instructions in
 `BuilderAgent.execute` so it passes a clarification question through clearly
 instead of turning it into an analysis.
-The Streamlit app sends the previous user/assistant exchange with the next
-request, so the user's answer is available during the follow-up. Chat history
-is held in Streamlit session state, not persisted between sessions.
+The app sends the previous user/assistant exchange with the next request.
+In the panel, it does so only while the view and data source remain unchanged.
+Chat history is held in Streamlit session state, not persisted between sessions.
 
 If the follow-up needs a new data operation rather than missing user input,
 implement that operation as a validated Python function first, then expose it
@@ -248,7 +281,6 @@ SQL or unrestricted ChromaDB access.
 To change the default behavior, edit the corresponding agent class and prompt
 in `multi_agent_framework/agent_manager.py`:
 
-- `TranslatorAgent.execute`: translation and preservation of query details.
 - `ResearcherAgent.execute`: research policy, tool-call policy, and evidence
   summary.
 - `ResearcherAgent._build_tools`: available tools, descriptions, argument
@@ -257,7 +289,7 @@ in `multi_agent_framework/agent_manager.py`:
   incomplete results or clarification questions.
 
 `MultiAgentSystem` registers one agent for each `AgentRole`:
-`TRANSLATOR`, `RESEARCHER`, and `BUILDER`. For a custom Python workflow, create
+`RESEARCHER` and `BUILDER`. For a custom Python workflow, create
 an agent with the matching role and register it:
 
 ```python

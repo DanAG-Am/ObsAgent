@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 from collections import defaultdict
 from collections.abc import Mapping
 from typing import Any, Iterable
@@ -156,6 +157,8 @@ def _where(filters: dict[str, Any] | None) -> dict[str, Any] | None:
             if not isinstance(value, str):
                 raise ValueError(f"{name} requires a string value")
             clauses.append({name: value})
+        elif isinstance(value, str) and value.isascii() and value.isdecimal():
+            clauses.append({name: int(value)})
         elif isinstance(value, int):
             clauses.append({name: value})
         elif isinstance(value, dict):
@@ -279,6 +282,18 @@ def cohort_curve(
     ]
 
 
+def dashboard_dimension_values(aggregates: chromadb.Collection) -> dict[str, list[str]]:
+    """Return available segment values from the same aggregates as the dashboard."""
+    names = ("product", "channel", "strategy")
+    values: dict[str, set[str]] = {name: set() for name in names}
+    for row in _rows(aggregates):
+        for name in names:
+            value = row.get(name)
+            if isinstance(value, str) and value:
+                values[name].add(value)
+    return {name: sorted(options) for name, options in values.items()}
+
+
 def combine_cohort_summaries(rows: list[dict[str, Any]]) -> dict[str, Any]:
     """Combine cohort totals before calculating ratios."""
     totals = _empty_totals()
@@ -350,6 +365,18 @@ def segment_ranking(
     )[:limit]
 
 
+def iqr_fences(values: list[float]) -> tuple[float, float, float, float]:
+    """Use the portfolio anomaly tool's quartile convention."""
+    if len(values) < 4:
+        raise ValueError("IQR requiere al menos cuatro observaciones.")
+    ordered = sorted(values)
+    midpoint = len(ordered) // 2
+    q1 = ordered[len(ordered[:midpoint]) // 2]
+    q3 = ordered[midpoint + len(ordered[midpoint:]) // 2]
+    spread = q3 - q1
+    return q1, q3, q1 - 1.5 * spread, q3 + 1.5 * spread
+
+
 def anomaly_candidates(
     aggregates: chromadb.Collection,
     group_by: str,
@@ -358,28 +385,83 @@ def anomaly_candidates(
     minimum_accounts: int = 0,
 ) -> list[dict[str, Any]]:
     """Flag IQR outliers over deterministic group KPI results."""
-    values = segment_ranking(
-        aggregates,
-        group_by,
-        metric,
-        filters,
-        limit=100,
-        descending=False,
-        minimum_accounts=minimum_accounts,
-    )
+    if metric not in DEFAULT_METRICS:
+        raise ValueError(f"Unsupported metric: {metric}")
+    values = [
+        row for row in kpis_by_dimension(aggregates, group_by, filters)
+        if row["measures"]["accounts"] >= minimum_accounts
+        and row["metrics"][metric] is not None
+        and math.isfinite(row["metrics"][metric])
+    ]
     if len(values) < 4:
         return []
-    ordered = sorted(row["metrics"][metric] for row in values)
-    midpoint = len(ordered) // 2
-    q1 = ordered[len(ordered[:midpoint]) // 2]
-    q3 = ordered[midpoint + len(ordered[midpoint:]) // 2]
-    spread = q3 - q1
-    lower, upper = q1 - 1.5 * spread, q3 + 1.5 * spread
+    q1, q3, lower, upper = iqr_fences([row["metrics"][metric] for row in values])
+    if q1 == q3:
+        return []
     return [
         {**row, "anomaly": "low" if row["metrics"][metric] < lower else "high"}
         for row in values
         if row["metrics"][metric] < lower or row["metrics"][metric] > upper
     ]
+
+
+def portfolio_alerts(
+    aggregates: chromadb.Collection,
+    group_by: str,
+    metric: str,
+    filters: dict[str, Any],
+    minimum_accounts: int,
+) -> dict[str, Any]:
+    """Compare eligible segments at one vintage and MOB using unrounded rates."""
+    definitions = {
+        "delinquency_rate_amount": ("over30_amount", "enrolled_amount"),
+        "delinquency_rate_accounts": ("over30_accounts", "enrolled_accounts"),
+    }
+    if group_by not in ("product", "channel", "strategy"):
+        raise ValueError("La dimensión de alerta debe ser producto, canal o estrategia.")
+    if metric not in definitions:
+        raise ValueError("La alerta solo admite tasas de morosidad.")
+    if group_by in filters or not isinstance(filters.get("vintage"), int) or not isinstance(filters.get("mob"), int):
+        raise ValueError("Selecciona una cosecha y un MOB, sin filtrar la dimensión comparada.")
+    if minimum_accounts < 1:
+        raise ValueError("Define un mínimo de cuentas mayor que cero.")
+    numerator, denominator = definitions[metric]
+    rows = kpis_by_dimension(aggregates, group_by, filters)
+    eligible = []
+    excluded = 0
+    for row in rows:
+        measures = row["measures"]
+        value = row["metrics"][metric]
+        if (not math.isfinite(measures["accounts"]) or measures["accounts"] < minimum_accounts
+                or measures[denominator] <= 0
+                or value is None or not math.isfinite(value)
+                or not math.isfinite(measures[numerator]) or not math.isfinite(measures[denominator])
+                or measures[numerator] < 0):
+            excluded += 1
+            continue
+        eligible.append(row)
+    result: dict[str, Any] = {
+        "group_by": group_by, "metric": metric, "filters": filters,
+        "minimum_accounts": minimum_accounts, "numerator": numerator,
+        "denominator": denominator, "peer_count": len(eligible),
+        "excluded_count": excluded, "candidates": [],
+        "status": "insufficient_peers", "q1": None, "q3": None,
+        "lower": None, "upper": None,
+    }
+    if len(eligible) < 4:
+        return result
+    q1, q3, lower, upper = iqr_fences([row["metrics"][metric] for row in eligible])
+    result.update(q1=q1, q3=q3, lower=lower, upper=upper)
+    if q1 == q3:
+        result["status"] = "zero_iqr"
+        return result
+    result["status"] = "evaluated"
+    result["candidates"] = [
+        {**row, "anomaly": "low" if row["metrics"][metric] < lower else "high"}
+        for row in eligible
+        if row["metrics"][metric] < lower or row["metrics"][metric] > upper
+    ]
+    return result
 
 
 def open_collections(

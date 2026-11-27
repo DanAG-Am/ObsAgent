@@ -32,7 +32,7 @@ by verified inputs:
 -   anomaly findings;
 -   narrative explanations and recommendations;
 -   methodology, metric definitions, filters, and data-quality notes;
--   source and snapshot metadata.
+-   available source metadata.
 
 Include only metrics and dimensions present in the approved catalog and
 supplied by verified source results.
@@ -63,8 +63,7 @@ information is absent:
     requested.
 9.  **Template and style**: selected template, page size, orientation,
     branding, and formatting rules.
-10. **Data metadata**: snapshot ID, refreshed-at timestamp, warnings,
-    and data-quality status.
+10. **Data metadata**: warnings and data-quality status.
 11. **Access status**: confirmation that the requesting user is
     authorized to receive the included data and that the applicable
     access policy has been applied.
@@ -80,8 +79,7 @@ Before rendering:
     query or analytical tools.
 2.  Confirm that metric names, dimensions, units, and definitions are
     available.
-3.  Confirm that all included results use a consistent snapshot unless
-    the report explicitly compares snapshots.
+3.  Preserve source context and do not mix incompatible results.
 4.  Confirm that filters and reporting periods are consistent across
     sections.
 5.  Preserve numerator and denominator metadata for derived rates and
@@ -114,11 +112,11 @@ A typical structure may contain:
 4.  **Detailed analysis**: requested charts, tables, comparisons, and
     trends.
 5.  **Anomalies and risk findings**: verified findings, severity,
-    confidence, and review status.
+    confidence, and warnings.
 6.  **Recommendations**: only recommendations supplied by or supported
     by the verified narrative output.
-7.  **Methodology and metadata**: definitions, filters, source snapshot,
-    refresh timestamp, and data-quality warnings.
+7.  **Methodology and metadata**: definitions, filters, source context,
+    and data-quality warnings.
 
 These sections are suggestions, not mandatory pages. Include only
 sections relevant to the requested report and available inputs.
@@ -165,7 +163,7 @@ Use the verified narrative output when it is supplied.
 -   Distinguish observed changes from causal explanations.
 -   Include recommendations only when supported by the evidence and
     approved workflow.
--   Preserve human-review requirements and relevant warnings.
+-   Preserve relevant warnings.
 
 Do not generate a new analytical conclusion while rendering the
 document.
@@ -210,8 +208,6 @@ the generation result and is not a replacement for the PDF file.
     }
   ],
   "metadata": {
-    "snapshot_id": "snapshot identifier",
-    "refreshed_at": "ISO-8601 timestamp",
     "filters": {},
     "warnings": []
   },
@@ -237,7 +233,7 @@ that a section was rendered if it was omitted or failed.
 -   Do not combine incompatible snapshots or filters.
 -   Do not hide low-volume or denominator warnings.
 -   Do not present example values as real portfolio results.
--   Keep the PDF traceable to its source snapshot and refresh timestamp.
+-   Keep the PDF traceable to its source results.
 -   Do not embed hidden or unauthorized data in document metadata,
     annotations, or attachments.
 
@@ -281,8 +277,7 @@ Return:
 4.  the selected template identifier;
 5.  the sections rendered or omitted;
 6.  the page count;
-7.  the snapshot ID and refreshed-at timestamp;
-8.  warnings, omitted sections, and generation errors.
+7.  warnings, omitted sections, and generation errors.
 
 The PDF must be readable by the intended recipient and traceable to its
 verified source data.
@@ -319,4 +314,4 @@ Before returning the PDF, verify that:
 10. missing values and warnings remain visible;
 11. access policy has been applied;
 12. the PDF opens and renders without clipping or corruption;
-13. snapshot ID, refresh time, and generation status are included.
+13. warnings and generation status are included.
