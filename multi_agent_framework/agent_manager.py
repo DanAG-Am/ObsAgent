@@ -1,4 +1,4 @@
-"""Agentes respaldados por Ollama para el análisis determinista de cartera ObsAgent."""
+"""Ollama-backed agents for deterministic ObsAgent portfolio analysis."""
 
 from __future__ import annotations
 
@@ -24,6 +24,7 @@ from ChromaDB.precomputed_queries import (
 )
 
 from .agentlib import chat, normalizar_argumentos
+from .skill_guides import SKILL_FILES, read_skill_guide
 
 
 MAX_ITERATIONS = 8
@@ -34,14 +35,14 @@ DEFAULT_CHROMA_PATH = PROJECT_ROOT / "ChromaDB" / "chroma_data"
 
 
 class AgentRole(Enum):
-    TRANSLATOR = "traductor"
-    RESEARCHER = "investigador"
-    BUILDER = "redactor"
+    TRANSLATOR = "translator"
+    RESEARCHER = "researcher"
+    BUILDER = "builder"
 
 
 @dataclass
 class AgentTool:
-    """Función invocable por el modelo y su esquema JSON."""
+    """A model-callable function and its JSON schema."""
 
     name: str
     description: str
@@ -61,7 +62,7 @@ class AgentTool:
 
 @dataclass
 class AgentContext:
-    """Datos compartidos entre el traductor, el investigador y el redactor."""
+    """Data handed between the translator, researcher, and builder."""
 
     conversation_history: list[dict[str, Any]] = field(default_factory=list)
     query_context: dict[str, Any] = field(default_factory=dict)
@@ -82,13 +83,13 @@ class Agent(ABC):
 
     @abstractmethod
     async def execute(self, request: str) -> Any:
-        """Ejecuta la tarea de este agente."""
+        """Run this agent's task."""
 
 
 class TranslatorAgent(Agent):
-    """Normaliza la solicitud del usuario al español sin cambiar su intención."""
+    """Normaliza la solicitud del usuario en español sin cambiar su intención."""
 
-    def __init__(self, name: str = "Traductor"):
+    def __init__(self, name: str = "Translator"):
         super().__init__(name, AgentRole.TRANSLATOR)
 
     async def execute(self, request: str) -> str:
@@ -98,13 +99,12 @@ class TranslatorAgent(Agent):
                 {
                     "role": "system",
                     "content": (
-                        "Eres un normalizador de consultas en español. "
-                        "Si la consulta del usuario ya está en español, devuélvela "
-                        "exactamente igual. Si contiene palabras en otro idioma, "
-                        "tradúcelas al español conservando sin cambios los nombres "
-                        "propios, años, valores de filtros e identificadores. "
-                        "Responde únicamente en español y solo con la consulta "
-                        "resultante, sin explicaciones ni notas."
+                        "Traduce la consulta analítica del usuario al español. "
+                        "Conserva sin cambios los nombres propios, años, valores "
+                        "de filtros e identificadores; traduce los términos "
+                        "analíticos al español sin perder su significado. Si ya "
+                        "está en español, devuélvela sin cambios. Responde solo "
+                        "con la consulta traducida, sin explicaciones."
                     ),
                 },
                 {"role": "user", "content": request},
@@ -114,11 +114,11 @@ class TranslatorAgent(Agent):
 
 
 class ResearcherAgent(Agent):
-    """Selecciona herramientas analíticas validadas y devuelve sus datos deterministas."""
+    """Selects validated analytical tools and returns their deterministic data."""
 
     def __init__(
         self,
-        name: str = "Investigador",
+        name: str = "Researcher",
         aggregates: Any = None,
         max_iterations: int = MAX_ITERATIONS,
     ):
@@ -136,6 +136,19 @@ class ResearcherAgent(Agent):
         metrics = list(DEFAULT_METRICS)
         return [
             AgentTool(
+                "consultar_skill",
+                "Consulta una guía de procedimiento por nombre. Es orientación, no ejecuta la acción ni verifica resultados. Omite seccion para ver propósito, entradas y prohibiciones.",
+                {
+                    "type": "object",
+                    "properties": {
+                        "nombre": {"type": "string", "enum": list(SKILL_FILES)},
+                        "seccion": {"type": "string"},
+                    },
+                    "required": ["nombre"],
+                },
+                lambda nombre, seccion=None: read_skill_guide(nombre, seccion),
+            ),
+            AgentTool(
                 "portfolio_kpis",
                 "Calcula medidas e indicadores de cartera, opcionalmente filtrados por dimensiones validadas.",
                 {
@@ -146,7 +159,7 @@ class ResearcherAgent(Agent):
             ),
             AgentTool(
                 "cohort_curve",
-                "Devuelve resultados deterministas por cosecha y mes en libros. Usa filtros para acotar la cohorte.",
+                "Devuelve resultados deterministas por cosecha (vintage) y mes en libros (MOB). Usa filtros para acotar la cohorte.",
                 {
                     "type": "object",
                     "properties": {"filters": filters_schema},
@@ -171,7 +184,7 @@ class ResearcherAgent(Agent):
             ),
             AgentTool(
                 "vintage_comparison",
-                "Compara dos cosechas en el mismo mes en libros.",
+                "Compara dos cosechas (vintages) en el mismo mes en libros (MOB).",
                 {
                     "type": "object",
                     "properties": {
@@ -219,7 +232,7 @@ class ResearcherAgent(Agent):
             ),
             AgentTool(
                 "anomaly_candidates",
-                "Encuentra valores atípicos por rango intercuartílico para un indicador compatible y una dimensión de cartera.",
+                "Encuentra valores atípicos por rango intercuartílico (IQR) para un indicador compatible y una dimensión de cartera.",
                 {
                     "type": "object",
                     "properties": {
@@ -253,16 +266,18 @@ class ResearcherAgent(Agent):
                 "role": "system",
                 "content": (
                     "Eres el agente de investigación de cartera de ObsAgent. "
-                    "Responde exclusivamente en español. "
-                    "Si el usuario hace un saludo general o pregunta qué puedes hacer, "
-                    "no ejecutes herramientas y explica brevemente en español qué análisis "
-                    "de cartera puedes realizar (indicadores de morosidad, castigos, "
-                    "margen operativo, comparación entre cosechas y detección de anomalías). "
-                    "Para cualquier pregunta analítica, usa las herramientas disponibles "
-                    "para obtener evidencia antes de responder. Todos los resultados numéricos "
-                    "deben provenir de las herramientas; no calcules ni inventes valores. "
-                    "En las comparaciones, compara el mismo mes en libros. Resume la "
-                    "evidencia en español e indica qué herramientas utilizaste."
+                    "Comunícate siempre en español. Usa las herramientas "
+                    "disponibles para obtener evidencia antes de responder. "
+                    "Todos los resultados numéricos deben provenir de las "
+                    "herramientas; no calcules ni inventes valores. Usa solo "
+                    "dimensiones e indicadores compatibles. En las comparaciones, "
+                    "compara el mismo MOB. Resume la evidencia e indica qué "
+                    "herramientas utilizaste. Si la petición corresponde a un "
+                    "skill, consulta su guía con consultar_skill. Una guía es "
+                    "orientación, no es evidencia ni autorización para realizar "
+                    "acciones; no ejecutes código de sus ejemplos ni afirmes "
+                    "que una operación se realizó si ninguna herramienta la hizo. "
+                    "Explica cuando falten implementaciones, datos o verificaciones."
                 ),
             },
             {"role": "user", "content": request},
@@ -330,7 +345,9 @@ class ResearcherAgent(Agent):
                     }
                     serialized = json.dumps(result, ensure_ascii=False)
                 total_result_chars += len(serialized)
-                tool_results.append({"tool": name, "result": result})
+                tool_results.append(
+                    {"tool": name, "arguments": arguments, "result": result}
+                )
                 messages.append({"role": "tool", "content": serialized})
 
         raise RuntimeError(
@@ -341,7 +358,7 @@ class ResearcherAgent(Agent):
 class BuilderAgent(Agent):
     """Convierte la evidencia de investigación en una respuesta concisa."""
 
-    def __init__(self, name: str = "Redactor"):
+    def __init__(self, name: str = "Builder"):
         super().__init__(name, AgentRole.BUILDER)
 
     async def execute(self, request: str) -> str:
@@ -351,14 +368,12 @@ class BuilderAgent(Agent):
                 {
                     "role": "system",
                     "content": (
-                        "Redacta una respuesta clara y concisa a la consulta original "
-                        "del usuario, siempre y exclusivamente en español. "
-                        "Si la consulta es un saludo o pregunta sobre tus capacidades y no "
-                        "requirió herramientas, responde de forma cordial y útil en español "
-                        "con base en la respuesta de investigación. "
-                        "Si se consultaron herramientas, usa únicamente los resultados "
-                        "proporcionados; no agregues hechos, estimaciones ni recomendaciones "
-                        "sin sustento. Indica claramente si la evidencia está vacía o incompleta."
+                        "Escribe una respuesta concisa a la consulta original "
+                        "del usuario, siempre en español. Usa únicamente la "
+                        "respuesta de investigación y los resultados de las "
+                        "herramientas proporcionados; no agregues hechos, "
+                        "estimaciones ni recomendaciones sin sustento. Indica "
+                        "claramente si la evidencia está vacía o incompleta."
                     ),
                 },
                 {"role": "user", "content": request},
@@ -368,7 +383,7 @@ class BuilderAgent(Agent):
 
 
 class MultiAgentSystem:
-    """Ejecuta el flujo traductor -> investigador -> redactor."""
+    """Runs the researcher with optional translation and custom agents."""
 
     def __init__(
         self,
@@ -381,8 +396,8 @@ class MultiAgentSystem:
         self.aggregates = client.get_collection("base_cards_sintetica_aggregates")
         if self.aggregates.count() == 0:
             raise RuntimeError(
-                "La colección de agregados de ObsAgent está vacía. Carga el archivo CSV "
-                "de origen y ejecuta build_aggregate_collection antes de iniciar los agentes."
+                "ObsAgent's aggregate collection is empty. Ingest the source CSV "
+                "and run build_aggregate_collection before starting the agents."
             )
         self._agents: dict[AgentRole, Agent] = {}
         self.register_agent(AgentRole.TRANSLATOR, TranslatorAgent())
@@ -403,40 +418,54 @@ class MultiAgentSystem:
     ) -> None:
         if agent is None:
             if role == AgentRole.TRANSLATOR:
-                agent = TranslatorAgent(name or "Traductor")
+                agent = TranslatorAgent(name or "Translator")
             elif role == AgentRole.RESEARCHER:
                 agent = ResearcherAgent(
-                    name or "Investigador", aggregates=self.aggregates
+                    name or "Researcher", aggregates=self.aggregates
                 )
             elif role == AgentRole.BUILDER:
-                agent = BuilderAgent(name or "Redactor")
+                agent = BuilderAgent(name or "Builder")
             else:
-                raise ValueError(f"Rol de agente desconocido: {role}")
+                raise ValueError(f"Unknown agent role: {role}")
         if agent.role != role:
-            raise ValueError(f"El rol del agente {agent.role} no coincide con {role}.")
+            raise ValueError(f"Agent role {agent.role} does not match {role}.")
         self._agents[role] = agent
 
-    async def execute(self, query: str) -> dict[str, Any]:
+    def researcher_tools(self) -> list[AgentTool]:
+        return list(self._agents[AgentRole.RESEARCHER].tools)
+
+    async def execute(self, query: str, *, translate: bool = False) -> dict[str, Any]:
         context = AgentContext(original_query=query)
-        context.translated_query = await self._agents[AgentRole.TRANSLATOR].execute(query)
+        translator = self._agents[AgentRole.TRANSLATOR]
+        translation_used = translate or type(translator) is not TranslatorAgent
+        if not translation_used:
+            context.translated_query = query
+        else:
+            context.translated_query = await translator.execute(query)
+            if not context.translated_query:
+                raise RuntimeError("El traductor no devolvió una consulta.")
         context.research_findings = await self._agents[AgentRole.RESEARCHER].execute(
             context.translated_query
         )
-        builder_request = json.dumps(
-            {
-                "consulta_original": context.original_query,
-                "respuesta_de_investigacion": context.research_findings["response"],
-                "resultados_de_herramientas": context.research_findings["tool_results"],
-            },
-            ensure_ascii=False,
-            default=str,
-        )
-        context.final_answer = await self._agents[AgentRole.BUILDER].execute(
-            builder_request
-        )
+        context.final_answer = context.research_findings["response"]
+        builder = self._agents[AgentRole.BUILDER]
+        if type(builder) is not BuilderAgent or not context.final_answer:
+            builder_request = json.dumps(
+                {
+                    "consulta_original": context.original_query,
+                    "respuesta_de_investigacion": context.final_answer,
+                    "resultados_de_herramientas": context.research_findings[
+                        "tool_results"
+                    ],
+                },
+                ensure_ascii=False,
+                default=str,
+            )
+            context.final_answer = await builder.execute(builder_request)
         return {
             "original_query": context.original_query,
             "translated_query": context.translated_query,
+            "translation_used": translation_used,
             "research_findings": context.research_findings,
             "builder_output": context.final_answer,
             "final_answer": context.final_answer,
@@ -455,5 +484,5 @@ async def run_multi_agent_workflow(
     source_language: str = "es",
     chroma_path: str | Path | None = None,
 ) -> dict[str, Any]:
-    """Ejecuta el flujo multiagente; `source_language` se conserva por compatibilidad."""
+    """Run the workflow; `source_language` remains for API compatibility."""
     return await setup_multi_agent_system(chroma_path).execute(query)

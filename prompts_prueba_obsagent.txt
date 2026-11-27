@@ -1,0 +1,80 @@
+PROMPTS ACOTADOS PARA PROBAR OBSAGENT
+
+Los valores 202401, 202402 y MOB 0, 1, 2 y 6 existen en el CSV local
+revisado. Si la base del servidor es distinta, selecciona valores disponibles
+en el panel de cartera y sustituyelos. Cada prueba es independiente.
+
+La respuesta depende de que el modelo elija correctamente las herramientas.
+Revisa "Como se obtuvo esta respuesta" para comprobar los argumentos,
+resultados y errores. No tomes como verificados datos sin evidencia.
+
+1. SALUDO
+Hola. Explica brevemente que puedes hacer con la cartera local.
+
+2. KPI DE MOROSIDAD
+Para la cosecha 202401 y MOB 6, calcula la tasa de morosidad por monto.
+Indica el monto vencido, el monto inscrito y el resultado.
+
+3. KPI DE MOROSIDAD POR CUENTAS
+Para la cosecha 202401 y MOB 6, calcula la tasa de morosidad por cuentas.
+Indica el numero de cuentas vencidas y de cuentas inscritas.
+
+4. CASTIGOS
+Para la cosecha 202401 y MOB 6, muestra las tasas de castigo bruto y neto.
+Indica los montos utilizados para calcularlas.
+
+5. COMPARAR DOS COSECHAS
+Compara la tasa de morosidad por monto de las cosechas 202401 y 202402
+en MOB 6. Muestra ambos valores y su diferencia en puntos porcentuales.
+
+6. GRAFICA DE EVOLUCION
+Muestra la tasa de morosidad por monto de la cosecha 202401 para los
+MOB 0, 1 y 2. Usa una grafica de lineas si los resultados lo permiten.
+
+7. RANKING POR PRODUCTO
+Para la cosecha 202401 y MOB 6, muestra los 5 productos con mayor tasa
+de morosidad por monto. Incluye la tasa y el numero de cuentas de cada uno.
+
+8. RANKING POR CANAL
+Para la cosecha 202401 y MOB 6, muestra los 5 canales con mayor tasa
+de castigo neto. Incluye la tasa y el numero de cuentas de cada uno.
+
+9. FILTRO POR PRODUCTO
+Para la cosecha 202401, MOB 6 y producto Clasica, calcula la tasa de
+morosidad por monto y muestra el numero de cuentas.
+
+10. MARGEN OPERATIVO
+Para la cosecha 202401 y MOB 6, calcula el margen operativo e indica
+los ingresos y gastos totales utilizados.
+
+11. POSIBLES ANOMALIAS
+Para la cosecha 202401 y MOB 6, busca productos con valores atipicos
+de tasa de morosidad por monto mediante IQR. Muestra unicamente los
+candidatos encontrados y aclara que requieren revision humana.
+
+12. TRADUCCION
+Activa "Traducir consulta antes de analizar" y envia:
+For vintage 202401 at MOB 6, calculate the amount delinquency rate.
+Revisa en la trazabilidad la consulta traducida y los filtros utilizados.
+
+13. CONSULTA DE UNA GUIA DE SKILL
+Consulta la guia Compare_Periods y explica que datos y controles necesita
+para comparar periodos. No afirmes que la comparacion se ha ejecutado.
+
+14. LIMITACIONES DE VERIFICACION
+Consulta la guia Verify_Numbers y explica que evidencia hace falta para
+verificar un reporte. Indica si la aplicacion puede hacerlo actualmente.
+
+15. BORRADOR DE REPORTE
+Para la cosecha 202401 y MOB 6, resume la tasa de morosidad por monto
+y la tasa de castigo neto. Indica los datos utilizados y sus limitaciones.
+Despues usa el boton "Descargar PDF de prueba" bajo la respuesta.
+El PDF es un borrador no verificado, no un reporte aprobado.
+
+16. FILTRO SIN RESULTADOS
+Para la cosecha 190001 y MOB 6, indica si existen datos. Si no existen,
+no inventes indicadores.
+
+Para registrar las pruebas, anota el tiempo aproximado, si hubo respuesta,
+las herramientas mostradas y cualquier error. El tiempo puede variar segun
+el servidor, el modelo y la cantidad de datos.

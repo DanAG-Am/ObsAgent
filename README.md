@@ -1,17 +1,33 @@
 # ObsAgent
 
 ObsAgent is a local portfolio analytics app with a Streamlit frontend, a
-ChromaDB data store, and an Ollama-backed multi-agent workflow. The app combines
+ChromaDB data store, and an Ollama-backed analytical agent. The app combines
 natural-language analysis with deterministic KPI calculations over precomputed
 aggregates.
 
 ## What the app does
 
-- **Ask ObsAgent:** submit questions in Spanish. A Translator, Researcher, and
-  Builder handle the request in Spanish in sequence.
+- **Ask ObsAgent:** submit questions in Spanish. The Researcher selects
+  validated analysis tools, summarizes their evidence, and displays a chart
+  when the result contains a useful grouped series. Each answer can be
+  downloaded as a local PDF test draft with its question and tool trace.
+  The draft is explicitly unverified and is not an approved report.
 - **Portfolio dashboard:** view a selected KPI and rank cosechas using the
   local aggregate collection. These dashboard queries use deterministic Python
-  calculations; they do not call Ollama.
+  calculations; they do not call Ollama. Filters show the available cosechas
+  and MOB values (including MOB 0). The first load reads the aggregates; the
+  resulting cohort summaries are cached for five minutes. Two charts show the
+  selected metric and account observations by MOB and cosecha, across all MOBs
+  of the selected cosecha; the MOB filter only affects the KPI cards. Account
+  observations summed across MOBs are not necessarily unique accounts.
+- **Capabilities and evidence:** inspect registered tools and the actual tool
+  arguments, results, and errors for each chat response. The model may consult
+  the repository's skill guides using `consultar_skill`; the trace shows whether
+  it actually did. Guide consultation does not execute the documented skills.
+  The selected guide content is sent to the configured Ollama endpoint, which
+  may not be local. The storage guide is empty and unavailable.
+- **Optional translation:** enable translation to Spanish in the sidebar. It
+  adds an Ollama call and shows the translated request in the response trace.
 - **Validated analysis:** the model can call only the analytics tools exposed
   by the Researcher. KPI calculations and supported filters are handled by
   `ChromaDB/precomputed_queries.py`, not invented by the model.
@@ -32,6 +48,21 @@ aggregates.
 The app's default ChromaDB directory is `ChromaDB/chroma_data`. To use another
 directory, set `OBSAGENT_CHROMA_PATH` or change the directory in the sidebar.
 
+## Tests
+
+From the project root, run the tests using the existing environment:
+
+```bash
+ChromaDB/.venv/bin/python -m tests.test_agent_manager &&
+ChromaDB/.venv/bin/python -m tests.test_csv_validation &&
+ChromaDB/.venv/bin/python -m tests.test_draft_report &&
+ChromaDB/.venv/bin/python -m tests.test_precomputed_queries &&
+ChromaDB/.venv/bin/python -m tests.test_response_charts &&
+ChromaDB/.venv/bin/python -m tests.test_streamlit_app
+```
+
+The agent and Streamlit tests use mocks and do not call Ollama.
+
 ## Frontend appearance
 
 The Streamlit interface and agent responses are in Spanish. Its header combines
@@ -43,27 +74,27 @@ brand accents; the header styling, logo treatment, and page layout are in
 
 | Agent | Responsibility | Main code |
 |---|---|---|
-| Translator | Normalizes the user's request in Spanish while preserving its intent, filters, and identifiers. | `TranslatorAgent.execute` in `multi_agent_framework/agent_manager.py` |
 | Researcher | Selects analytical tools, gathers evidence, and summarizes results in Spanish without inventing numbers. | `ResearcherAgent` in `multi_agent_framework/agent_manager.py` |
-| Builder | Presents the evidence-based response in Spanish. | `BuilderAgent.execute` in `multi_agent_framework/agent_manager.py` |
+| Translator and Builder | Translation is optional in the UI; a custom Builder can be registered for custom workflows. | `TranslatorAgent` and `BuilderAgent` in `multi_agent_framework/agent_manager.py` |
 
-The workflow is a pipeline: only the previous agent's output and the query
-context are handed to the next agent. The Streamlit chat keeps recent messages
-in the current session and includes them with the next request.
+The default app sends the question directly to the Researcher and uses its
+response as the final answer. The trace shows whether tools were actually used
+and reports any tool errors; check it before relying on the answer. The Streamlit chat keeps the full
+conversation in the current session but sends only the previous exchange with
+the next request.
 
 ## Changing agent behavior or follow-up questions
 
 To make the Researcher ask for clarification instead of guessing when a query
 is ambiguous, edit its system prompt in `ResearcherAgent.execute`. For example,
 add a rule to ask one concise question when a required vintage, MOB, metric, or
-comparison is unclear, and not to call a tool until the user answers. Update
-the Builder prompt in `BuilderAgent.execute` to preserve that clarification as
-a question rather than presenting it as a final analysis.
+comparison is unclear, and not to call a tool until the user answers. If using
+a custom Builder, update its prompt to preserve that clarification as a
+question rather than presenting it as a final analysis.
 
-The Streamlit chat carries up to the eight most recent messages into the next
-request, so the user can answer a follow-up in the same conversation. To retain
-more context, change the `[-8:]` history window in `streamlit_app.py`. This
-history is session state; it is not persisted as a database conversation.
+The Streamlit chat carries the previous user/assistant exchange into the next
+request, so the user can answer a follow-up without resending the full history.
+This history is session state; it is not persisted as a database conversation.
 
 ## Adding or changing analytical capabilities
 

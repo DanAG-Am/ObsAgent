@@ -10,6 +10,7 @@ from __future__ import annotations
 import hashlib
 import json
 from collections import defaultdict
+from collections.abc import Mapping
 from typing import Any, Iterable
 
 import chromadb
@@ -86,7 +87,7 @@ def _empty_totals() -> dict[str, float]:
     return {measure: 0.0 for measure in MEASURES}
 
 
-def _add_row(totals: dict[str, float], row: dict[str, Any]) -> None:
+def _add_row(totals: dict[str, float], row: Mapping[str, Any]) -> None:
     for measure in MEASURES:
         totals[measure] += float(row.get(measure, 0) or 0)
 
@@ -173,22 +174,34 @@ def _where(filters: dict[str, Any] | None) -> dict[str, Any] | None:
 def _rows(
     aggregates: chromadb.Collection,
     filters: dict[str, Any] | None = None,
-    batch_size: int = 500,
-) -> list[dict[str, Any]]:
-    """Retrieve matching aggregate records in bounded batches."""
+) -> list[Mapping[str, Any]]:
+    """Retrieve aggregate metadata without offset-scanning unfiltered pages."""
     where = _where(filters)
-    rows: list[dict[str, Any]] = []
+    if where is None:
+        count = aggregates.count()
+        if not count:
+            return []
+        ids = aggregates.get(limit=count, include=[])["ids"]
+        rows: list[Mapping[str, Any]] = []
+        for id_batch in _chunks(ids, 900):
+            result = aggregates.get(ids=id_batch, include=["metadatas"])
+            rows.extend(result.get("metadatas") or [])
+        return rows
+
+    batch_size = 5_000
     offset = 0
+    rows: list[Mapping[str, Any]] = []
 
     while True:
         result = aggregates.get(
             where=where,
+            include=["metadatas"],
             limit=batch_size,
             offset=offset,
-            include=["metadatas"],
         )
 
         batch = result.get("metadatas") or []
+
         if not batch:
             break
 
@@ -222,7 +235,7 @@ def _metrics(totals: dict[str, float]) -> dict[str, float | None]:
     }
 
 
-def _summarize(rows: list[dict[str, Any]]) -> dict[str, Any]:
+def _summarize(rows: list[Mapping[str, Any]]) -> dict[str, Any]:
     totals = _empty_totals()
     for row in rows:
         _add_row(totals, row)
@@ -245,7 +258,7 @@ def kpis_by_dimension(
     """Compare KPIs by one allowlisted dimension."""
     if group_by not in DIMENSIONS:
         raise ValueError(f"Unsupported grouping dimension: {group_by}")
-    groups: dict[Any, list[dict[str, Any]]] = defaultdict(list)
+    groups: dict[Any, list[Mapping[str, Any]]] = defaultdict(list)
     for row in _rows(aggregates, filters):
         groups[row[group_by]].append(row)
     return [{group_by: value, **_summarize(rows)} for value, rows in groups.items()]
@@ -257,13 +270,25 @@ def cohort_curve(
 ) -> list[dict[str, Any]]:
     """Return KPI rows ordered by vintage and MOB for cohort charts."""
     # Keep MOB visible by querying the aggregate records at the requested grain.
-    grouped: dict[tuple[Any, Any], list[dict[str, Any]]] = defaultdict(list)
+    grouped: dict[tuple[Any, Any], list[Mapping[str, Any]]] = defaultdict(list)
     for row in _rows(aggregates, filters):
         grouped[(row["vintage"], row["mob"])].append(row)
     return [
         {"vintage": vintage, "mob": mob, **_summarize(group)}
         for (vintage, mob), group in sorted(grouped.items())
     ]
+
+
+def combine_cohort_summaries(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    """Combine cohort totals before calculating ratios."""
+    totals = _empty_totals()
+    for row in rows:
+        _add_row(totals, row["measures"])
+    return {
+        "measures": totals,
+        "metrics": _metrics(totals),
+        "row_count": sum(row["row_count"] for row in rows),
+    }
 
 
 def vintage_comparison(
