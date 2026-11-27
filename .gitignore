@@ -158,3 +158,9 @@ chroma_data/
 .vscode
 .claude
 .pycache
+__pycache__/
+*.py[cod]
+*.pyc
+
+# macOS
+.DS_Store
