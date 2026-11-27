@@ -48,8 +48,14 @@ class QueryService:
         self._chroma_path = Path(path)
         self._system = setup_multi_agent_system(self._chroma_path)
 
-    async def query(self, request: str) -> dict[str, Any]:
-        return await self._system.execute(request)
+    async def query(self, request: str, *, translate: bool = False) -> dict[str, Any]:
+        return await self._system.execute(request, translate=translate)
+
+    def available_tools(self) -> list[dict[str, str]]:
+        return [
+            {"name": tool.name, "description": tool.description}
+            for tool in self._system.researcher_tools()
+        ]
 
     async def query_kpi(
         self,
@@ -91,6 +97,9 @@ class QueryService:
             top_n,
             descending,
         )
+
+    async def get_dashboard_cohorts(self) -> list[dict[str, Any]]:
+        return await asyncio.to_thread(cohort_curve, self._system.aggregates)
 
     async def search_semantically(
         self,

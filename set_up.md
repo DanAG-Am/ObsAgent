@@ -166,12 +166,24 @@ Alternatively, run Streamlit directly from the environment:
 ChromaDB/.venv/bin/streamlit run streamlit_app.py
 ```
 
-Open the local URL printed by Streamlit in your browser. The app has two tabs:
+Open the local URL printed by Streamlit in your browser. The workspace includes
+an overview and the following views:
 
-- **Ask ObsAgent:** sends the request to the Translator → Researcher → Builder
-  agent workflow. Ollama must be running for this tab.
+- **Ask ObsAgent:** sends the request directly to the Researcher, which calls
+  validated tools and returns an evidence-backed answer. Grouped results can
+  also appear as a chart. Ollama must be running for this tab.
 - **Portfolio dashboard:** calculates KPIs and vintage rankings directly from
-  the aggregates. These calculations are deterministic and do not call Ollama.
+  the aggregates. These calculations are deterministic, do not call Ollama,
+  and only run while the dashboard tab is selected.
+- **Cómo funciona:** lists the registered tools and explains the current
+  limitations. The agent can consult allowlisted `SKILLS/` guides using
+  `consultar_skill`. Reading a guide does not execute the documented procedure;
+  the model may also choose not to call it. Guide content is sent to the
+  configured Ollama endpoint, which may be remote. The storage guide is empty.
+
+The sidebar offers optional translation of a request to Spanish before analysis.
+This adds a model call. Expand the trace under an answer to see whether
+translation ran and which tools, arguments, results, or errors were returned.
 
 By default, the app reads `ChromaDB/chroma_data`. To select a different
 ChromaDB directory, set `OBSAGENT_CHROMA_PATH` before starting Streamlit or
@@ -185,9 +197,10 @@ The roles and default prompts are in
 
 | Stage | Agent | What it does |
 |---|---|---|
-| 1 | Translator | Converts the request to English and preserves metric names, years, filters, and identifiers. Already-English requests are returned unchanged by the model. |
-| 2 | Researcher | Uses an Ollama tool-calling loop to choose from the registered analytics tools and summarizes their results. |
-| 3 | Builder | Uses the original request and research evidence to produce a concise answer in the original language. |
+| Default | Researcher | Uses an Ollama tool-calling loop to choose from registered analytics tools and returns a concise Spanish summary with evidence. |
+
+Translator and Builder remain available for custom workflows, but the default
+app skips their extra model calls.
 
 Available Researcher tools:
 
@@ -217,13 +230,12 @@ Specify:
 4. That it must not guess when the user has not supplied the required
    information.
 
-Adjust the Builder instructions in `BuilderAgent.execute` so it passes a
-clarification question through clearly instead of turning it into an analysis.
-The Streamlit app includes up to eight recent chat messages in the next
-request, so the user's answer is available during the follow-up. Change the
-`[-8:]` slice in `streamlit_app.py` if you want to send a different amount of
-recent conversation. Chat history is held in Streamlit session state, not
-persisted between sessions.
+For a custom workflow that uses the Builder, adjust its instructions in
+`BuilderAgent.execute` so it passes a clarification question through clearly
+instead of turning it into an analysis.
+The Streamlit app sends the previous user/assistant exchange with the next
+request, so the user's answer is available during the follow-up. Chat history
+is held in Streamlit session state, not persisted between sessions.
 
 If the follow-up needs a new data operation rather than missing user input,
 implement that operation as a validated Python function first, then expose it
