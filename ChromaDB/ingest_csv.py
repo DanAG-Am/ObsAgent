@@ -7,7 +7,6 @@ from pathlib import Path
 
 import chromadb
 
-
 PROJECT_DIR = Path(__file__).resolve().parent
 CSV_PATH = PROJECT_DIR.parent / "database" / "base_cards_sintetica.csv"
 CHROMA_PATH = PROJECT_DIR / "chroma_data"
@@ -16,6 +15,52 @@ BATCH_SIZE = 5_000
 EMBEDDING_DIMENSION = 64
 TOKEN_PATTERN = re.compile(r"[a-z0-9]+", re.IGNORECASE)
 
+REQUIRED_COLUMNS = [
+    "VINTAGE",
+    "STRATEGY",
+    "STRATEGY_SEGMENT",
+    "PRODUCT",
+    "CHANNEL",
+    "AGE_TAG",
+    "SCORE_TAG",
+    "MOB",
+    "ACCOUNTS",
+    "CREDITLINESAMTS",
+    "ENRACCTS",
+    "OVER30ACCTS",
+    "OVER30AMTS",
+    "GCLAMTS",
+    "NCLAMTS",
+    "RECOVERYAMTS",
+    "ENRAMTS",
+    "REVENUE",
+    "EXPENSES_ACQ",
+    "EXPENSES_ECM_VAR",
+    "EXPENSES_ECM_FIX",
+    "EXPENSES_TOTAL",
+]
+
+INTEGER_COLUMNS = [
+    "VINTAGE",
+    "MOB",
+    "ACCOUNTS",
+    "ENRACCTS",
+    "OVER30ACCTS",
+]
+
+FLOAT_COLUMNS = [
+    "CREDITLINESAMTS",
+    "OVER30AMTS",
+    "GCLAMTS",
+    "NCLAMTS",
+    "RECOVERYAMTS",
+    "ENRAMTS",
+    "REVENUE",
+    "EXPENSES_ACQ",
+    "EXPENSES_ECM_VAR",
+    "EXPENSES_ECM_FIX",
+    "EXPENSES_TOTAL",
+]
 
 def hashed_embedding(text: str) -> list[float]:
     vector = [0.0] * EMBEDDING_DIMENSION
@@ -31,6 +76,103 @@ def hashed_embedding(text: str) -> list[float]:
 def row_document(row: dict[str, str]) -> str:
     return " | ".join(f"{key}={value}" for key, value in row.items())
 
+def validate_csv(csv_path: Path) -> int:
+    """
+    Validate CSV headers and numeric values before modifying ChromaDB.
+
+    Returns:
+        Number of valid data rows.
+    """
+    if not csv_path.exists():
+        raise FileNotFoundError(
+            f"CSV file not found: {csv_path}"
+        )
+
+    valid_rows = 0
+
+    with csv_path.open(
+        newline="",
+        encoding="utf-8-sig"
+    ) as csv_file:
+
+        reader = csv.DictReader(csv_file)
+
+        if not reader.fieldnames:
+            raise ValueError("The CSV file is empty or has no header.")
+
+        headers = reader.fieldnames
+
+        # Check duplicate columns
+        duplicates = [
+            column
+            for column in set(headers)
+            if headers.count(column) > 1
+        ]
+
+        if duplicates:
+            raise ValueError(
+                f"Duplicate CSV columns: {duplicates}"
+            )
+
+        # Check required columns
+        missing_columns = [
+            column
+            for column in REQUIRED_COLUMNS
+            if column not in headers
+        ]
+
+        if missing_columns:
+            raise ValueError(
+                f"Missing required CSV columns: {missing_columns}"
+            )
+
+        # Validate each row
+        for row in reader:
+            line_number = reader.line_num
+
+            # Detect rows with extra or missing fields
+            if None in row or any(
+                value is None for value in row.values()
+            ):
+                raise ValueError(
+                    f"Invalid number of fields at CSV line "
+                    f"{line_number}."
+                )
+
+            # Validate integer columns
+            for column in INTEGER_COLUMNS:
+                value = row[column].strip()
+
+                try:
+                    int(value)
+                except (ValueError, TypeError):
+                    raise ValueError(
+                        f"Invalid integer at CSV line {line_number}, "
+                        f"column '{column}': {value!r}"
+                    ) from None
+
+            # Validate float columns
+            for column in FLOAT_COLUMNS:
+                value = row[column].strip()
+
+                try:
+                    number = float(value)
+
+                    if not math.isfinite(number):
+                        raise ValueError
+
+                except (ValueError, TypeError):
+                    raise ValueError(
+                        f"Invalid number at CSV line {line_number}, "
+                        f"column '{column}': {value!r}"
+                    ) from None
+
+            valid_rows += 1
+
+    if valid_rows == 0:
+        raise ValueError("The CSV contains no data rows.")
+
+    return valid_rows
 
 def ingest_csv(collection: chromadb.Collection) -> int:
     total = 0
@@ -80,8 +222,15 @@ def ingest_csv(collection: chromadb.Collection) -> int:
 
 
 def main() -> None:
+    print("Validating CSV...")
+
+    valid_rows = validate_csv(CSV_PATH)
+
+    print(f"CSV validation successful: {valid_rows:,} rows.")
+
     client = chromadb.PersistentClient(path=str(CHROMA_PATH))
     collection = client.get_or_create_collection(name=COLLECTION_NAME)
+
     ingested = ingest_csv(collection)
 
     query = "young customers with a high credit score at an airport"
