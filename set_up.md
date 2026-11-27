@@ -40,6 +40,25 @@ environment. To activate it for the rest of the session:
 source ChromaDB/.venv/bin/activate
 ```
 
+On Windows, use a standard x64 CPython installation, not the Python bundled
+with MSYS2. MSYS2's `mingw` platform tags do not match ChromaDB's Windows
+wheel. Check installed Python versions, then create a separate Windows
+environment from the project root:
+
+```powershell
+py -0p
+py -3.12 -m venv .\ChromaDB\.venv
+& ".\ChromaDB\.venv\Scripts\python.exe" -m pip install --upgrade pip
+& ".\ChromaDB\.venv\Scripts\python.exe" -m pip install -r ".\ChromaDB\requirements.txt"
+```
+
+If using Python 3.xx instead of the recommended 3.12, replace `-3.12` with
+`-3.xx`. Activate the environment in PowerShell with:
+
+```powershell
+.\ChromaDB\.venv\Scripts\Activate.ps1
+```
+
 ## 3. Configure and start Ollama
 
 Make sure the Ollama service is running. On macOS, opening Ollama starts its
@@ -86,6 +105,12 @@ From the project root, run:
 ChromaDB/.venv/bin/python ChromaDB/ingest_csv.py
 ```
 
+In Windows PowerShell, use the Windows virtual environment instead:
+
+```powershell
+& ".\ChromaDB\.venv\Scripts\python.exe" ".\ChromaDB\ingest_csv.py"
+```
+
 This creates or updates the `base_cards_sintetica` collection in
 `ChromaDB/chroma_data/`. It processes the CSV in batches and runs a sample
 similarity query at the end. The first ingestion can take several minutes.
@@ -109,6 +134,13 @@ source, aggregates = open_collections()
 count = build_aggregate_collection(source, aggregates)
 print("Aggregate rows:", count)
 PY
+```
+
+In Windows PowerShell, run the same operation with the Windows virtual
+environment:
+
+```powershell
+& ".\ChromaDB\.venv\Scripts\python.exe" -c "from ChromaDB.precomputed_queries import build_aggregate_collection, open_collections; source, aggregates = open_collections(); count = build_aggregate_collection(source, aggregates); print('Aggregate rows:', count)"
 ```
 
 This creates `base_cards_sintetica_aggregates`, grouped at the project's
@@ -234,6 +266,10 @@ system is the one the app uses.
 
 ## Troubleshooting
 
+- **ChromaDB install fails with `Unsupported platform: 312` or no matching
+  distribution:** on Windows, use standard x64 CPython as shown in section 2,
+  not MSYS2 Python. MSYS2's platform tags prevent pip from selecting ChromaDB's
+  Windows wheel, so it falls back to a source build that may fail in Maturin.
 - **Missing collection:** complete the ingestion and aggregate-building steps.
 - **CSV not found:** place the input file at
   `database/base_cards_sintetica.csv`, relative to the project root.
