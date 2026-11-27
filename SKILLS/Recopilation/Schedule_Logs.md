@@ -3,8 +3,8 @@
 ## Purpose
 
 Schedule and execute recurring or manual data-extraction processes. Each
-execution must record the date, status, files processed, source snapshot
-information, and outcome in an auditable execution history.
+execution must record the date, status, files processed, source information,
+and outcome in an auditable execution history.
 
 This skill coordinates scheduling and logging. It does not transform CSV
 data; that work belongs to `Download_CSV`, `Validate_CSV_schema`,
@@ -23,7 +23,7 @@ Request clarification if any required input is missing:
 7. execution-log destination;
 8. file retention and overwrite policy;
 9. concurrency policy;
-10. source snapshot or reporting-period rule, when applicable.
+10. reporting-period rule, when applicable.
 
 Never invent a schedule, source, credential, destination, or retention rule.
 Use only approved source and scheduler configurations.
@@ -68,8 +68,8 @@ For every scheduled or manual run:
 1. create a unique `execution_id`;
 2. record `started_at` before starting work;
 3. acquire the configured job lock;
-4. determine the source snapshot or reporting period;
-5. execute `Download_CSV` or `Fetch_From_Storage`;
+4. determine the reporting period;
+5. execute `Download_CSV`;
 6. pass completed files to `Validate_CSV_schema`;
 7. pass schema-valid files to `Validate_Data_Quality`;
 8. record every file attempted and its final status;
@@ -100,8 +100,6 @@ execution = {
     "files_processed": [],
     "warnings": [],
     "errors": [],
-    "snapshot_id": None,
-    "refreshed_at": None,
 }
 ```
 
@@ -155,7 +153,7 @@ Preserve the source file reference and destination separately.
 - Permit only one active execution per job unless overlap is explicitly
   approved;
 - use a lock with expiration for crash recovery;
-- derive stable snapshot or file identifiers from source metadata;
+- derive stable file identifiers from source metadata;
 - prevent duplicate ingestion of the same immutable file;
 - retry at file granularity when safe;
 - do not rerun the entire source after one file has already completed;
@@ -228,8 +226,6 @@ Return a structured extraction execution result:
   "attempt": 1,
   "previous_execution_id": null,
   "source": "approved source identifier",
-  "snapshot_id": "snapshot identifier or null",
-  "refreshed_at": "ISO-8601 timestamp or null",
   "files_processed": [],
   "retry": {
     "scheduled": false,
@@ -258,7 +254,7 @@ Do not:
 - silently retry permanent errors;
 - transform or repair CSV contents in this skill;
 - delete source files solely for successful reprocessing;
-- guess a reporting period or source snapshot;
+- guess a reporting period;
 - claim that a process completed when only a request was submitted.
 
 ## Quality checklist
@@ -275,5 +271,5 @@ Before returning the execution result:
 8. concurrency and overlap were controlled;
 9. authentication secrets are absent from the log;
 10. schema and quality outcomes are linked to each file;
-11. source snapshot metadata is included when available;
+11. source metadata is included when available;
 12. the execution history remains auditable.

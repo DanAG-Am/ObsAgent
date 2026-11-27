@@ -63,7 +63,6 @@ The response to use must contain:
 - result rows;
 - metric definitions and formula version;
 - numerator and denominator fields;
-- snapshot ID and refreshed-at timestamp;
 - warnings and data-quality status.
 
 ## Calculation rules
@@ -158,8 +157,7 @@ For a two-period result, report only `up`, `down`, or `flat`; do not label it a 
 - Warn when `accounts`, `enrolled_accounts`, or another metric's denominator is below the minimum-volume threshold.
 - Warn for missing vintages, duplicate observations, null values, invalid values, and low coverage.
 - Do not compare populated and non-populated subsets as if they were like-for-like.
-- Hand off critical, severe, or low-confidence variations for human review.
-- Include the snapshot ID and refreshed-at timestamp in every report output.
+- Surface critical, severe, or low-confidence variations with their warnings.
 
 ## Required output
 
@@ -197,9 +195,7 @@ Return a period-comparison object for downstream narrative generation:
     "valid_observation_count": 0
   },
   "units": "metric unit or percentage points",
-  "warnings": [],
-  "snapshot_id": "snapshot identifier",
-  "refreshed_at": "ISO-8601 timestamp"
+  "warnings": []
 }
 ```
 
@@ -240,4 +236,4 @@ Before returning the result:
 5. zero and missing baselines are handled explicitly;
 6. trend observations are ordered and valid;
 7. volume and data-quality warnings are included;
-8. snapshot ID and refresh time are present.
+8. source limitations and warnings are present.

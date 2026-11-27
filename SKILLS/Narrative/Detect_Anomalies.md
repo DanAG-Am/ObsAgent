@@ -34,6 +34,15 @@ Therefore:
 If a requested fraud or claims metric is absent, return `unavailable` rather
 than a false anomaly.
 
+## Synthetic fraud demonstration
+
+When explicitly requested, `analizar_fraude_simulado` applies the existing IQR
+quartile convention to fixed, invented channel-level incident counts and
+transaction counts. It returns the rates, peer values and fences. Its output is
+for demonstration only: it is not linked to the portfolio database, is not a
+fraud probability or a validated detector, and must never be treated as evidence
+of real fraud. Do not substitute it for a request about real fraud.
+
 ## Required inputs
 
 Request clarification if any of these is absent:
@@ -65,9 +74,13 @@ KPI results:
 }
 ```
 
-The tool response must include the metric definition, numerators,
-denominators, snapshot ID, refreshed timestamp, warnings, and data-quality
-status.
+The current tool returns candidate group KPI rows, including measures, but not
+the peer count, fences, or a status. An empty list may also mean fewer than
+four valid groups or zero IQR; never claim it proves there are no anomalies.
+Do not present its output as the complete structured result below without
+independently available method, denominator, scope, and data-quality evidence.
+The dashboard's separate delinquency alerts show the peer count, exclusions,
+fences and numerator/denominator for a selected vintage and MOB.
 
 ## Procedure: observation eligibility
 
@@ -171,8 +184,7 @@ A regulatory check is valid only when all of the following are available:
 - threshold value;
 - operator (`>`, `>=`, `<`, `<=`, `==`);
 - effective date and source;
-- approved grace or reporting period;
-- escalation and human-review process.
+- approved grace or reporting period.
 
 Never invent a regulatory limit. Do not use another jurisdiction's limit for
 the portfolio. Do not treat a value below a floor or above a ceiling as a
@@ -212,7 +224,7 @@ Requirements:
 - report both counts and amounts where available;
 - do not infer fraud intent from a delinquency or charge-off result;
 - do not compare raw fraud counts across unequal populations;
-- route suspected or severe fraud for human review.
+- clearly report the limitations of suspected or severe fraud findings.
 
 ## Delinquency anomalies
 
@@ -263,10 +275,10 @@ Classify severity only after volume and data quality are considered:
 | High | extreme z-score, IQR fence breach, or major approved threshold proximity |
 | Medium | significant z-score, low/other IQR outlier, or material change |
 | Low | weak statistical deviation without policy or materiality breach |
-| Review required | unsupported metric, low volume, missing data, or insufficient peers |
+| Insufficient evidence | unsupported metric, low volume, missing data, or insufficient peers |
 
-Always apply human-review safeguards for critical anomalies, severe counts or
-losses, low denominators, low data quality, or conflicting methods.
+Always report critical anomalies, low denominators, low data quality, and
+conflicting methods with their evidence and limitations.
 
 ## Required output
 
@@ -315,12 +327,9 @@ Return a structured anomaly result:
       "status": "threshold_unavailable | within_threshold | approaching | breach"
     }
   },
-  "severity": "critical | high | medium | low | review_required",
+  "severity": "critical | high | medium | low | insufficient_evidence",
   "confidence": "high | medium | low",
-  "warnings": [],
-  "human_review_required": false,
-  "snapshot_id": "snapshot identifier",
-  "refreshed_at": "ISO-8601 timestamp"
+  "warnings": []
 }
 ```
 
@@ -332,15 +341,13 @@ Lead with the observation and domain, then explain:
 2. the value and whether it is high or low;
 3. z-score, IQR, and/or threshold evidence;
 4. numerator, denominator, volume, and period;
-5. data-quality or missing-threshold warnings;
-6. recommended human review.
+5. data-quality or missing-threshold warnings.
 
 Example:
 
 > The [Channel] had a delinquency amount rate of 8.2% against a peer mean of
 > 4.1%, a z-score of 3.4, and an upper IQR fence of 7.5%. It is an extreme
-> high statistical outlier and requires human review. This description uses
-> only verified snapshot values.
+> high statistical outlier. This description uses only verified values.
 
 Do not use the example numbers unless they appear in verified results.
 
@@ -364,4 +371,4 @@ Before returning an anomaly result:
 5. regulatory evidence includes jurisdiction, source, and effective date;
 6. volume and denominator warnings are included;
 7. severity and confidence are consistent;
-8. snapshot ID and refresh time are present.
+8. source limitations and warnings are present.

@@ -8,7 +8,6 @@ from .agent_manager import (
     BuilderAgent,
     MultiAgentSystem,
     ResearcherAgent,
-    TranslatorAgent,
     run_multi_agent_workflow,
     setup_multi_agent_system,
 )
@@ -38,7 +37,6 @@ __all__ = [
     "MultiAgentSystem",
     "QueryService",
     "ResearcherAgent",
-    "TranslatorAgent",
     "get_query_service",
     "initialize_segmented_collections",
     "query_segmented_collection",

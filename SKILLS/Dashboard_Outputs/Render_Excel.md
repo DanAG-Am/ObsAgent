@@ -56,8 +56,7 @@ information is absent:
     requested.
 8.  **Workbook preferences**: requested worksheets, ordering,
     formatting, and level of detail.
-9.  **Data metadata**: snapshot ID, refreshed-at timestamp, warnings,
-    and data-quality status.
+9.  **Data metadata**: warnings and data-quality status.
 10. **Access status**: confirmation that the requesting user is
     authorized to receive the included data and that the applicable
     access policy has been applied.
@@ -73,8 +72,7 @@ Before creating the workbook:
     query or analytical tools.
 2.  Confirm that metric names, dimensions, units, and definitions are
     available.
-3.  Confirm that all included results use a consistent snapshot unless
-    the workbook explicitly compares snapshots.
+3.  Preserve source context and do not mix incompatible results.
 4.  Confirm that filters and reporting periods are consistent across
     worksheets.
 5.  Preserve numerator and denominator fields for derived rates and
@@ -115,7 +113,7 @@ A typical workbook may contain:
                                       candidates and their severity
 
   Definitions & Metadata              Documents metric definitions,
-                                      filters, snapshot information, and
+                                      filters, source context, and
                                       warnings
   -----------------------------------------------------------------------
 
@@ -241,8 +239,6 @@ workbook.
     "conditional_formatting": true
   },
   "metadata": {
-    "snapshot_id": "snapshot identifier",
-    "refreshed_at": "ISO-8601 timestamp",
     "filters": {},
     "warnings": []
   },
@@ -268,8 +264,7 @@ not.
 -   Do not combine incompatible snapshots or filters.
 -   Do not hide low-volume or denominator warnings.
 -   Do not present example values as real portfolio results.
--   Keep the workbook traceable to its source snapshot and refresh
-    timestamp.
+-   Keep the workbook traceable to its source results.
 
 If access authorization or masking cannot be confirmed, do not generate
 the workbook for distribution.
@@ -308,8 +303,7 @@ Return:
 2.  the generation status;
 3.  the list of worksheets created;
 4.  the reporting period and normalized filters;
-5.  the snapshot ID and refreshed-at timestamp;
-6.  warnings, omitted sections, and generation errors.
+5.  warnings, omitted sections, and generation errors.
 
 The workbook must be usable by the recipient and traceable to its
 verified source data.
@@ -346,4 +340,4 @@ Before returning the workbook, verify that:
 9.  missing values and warnings remain visible;
 10. access policy has been applied;
 11. the workbook opens and contains the expected worksheets;
-12. snapshot ID, refresh time, and generation status are included.
+12. warnings and generation status are included.

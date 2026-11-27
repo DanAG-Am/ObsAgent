@@ -9,18 +9,18 @@ findings.
 
 Use this skill after `Detect_Anomalies` and before `Generate_Narrative`.
 The highlighted findings must remain traceable to the structured anomaly
-objects and original snapshot.
+objects and original source.
 
 ## Required inputs
 
 - one or more structured anomaly objects;
-- each anomaly's `severity`, `confidence`, and `human_review_required`;
+- each anomaly's `severity` and `confidence`;
 - regulatory, z-score, IQR, and volume evidence;
-- metric, domain, period, group, filters, and snapshot metadata;
+- metric, domain, period, group, and filters;
 - report recipient and report objective.
 
 Ignore a result that is not a verified anomaly unless it is explicitly
-classified as `review_required`. Never promote ordinary, missing, or
+classified as `insufficient_evidence`. Never promote ordinary, missing, or
 unsupported values into highlighted findings.
 
 ## Procedure: severity ranking
@@ -30,21 +30,20 @@ Apply this descending priority order:
 | Priority | Severity | Placement |
 |---:|---|---|
 | 1 | `critical` | first |
-| 2 | `review_required` | first or immediately after critical findings |
+| 2 | `insufficient_evidence` | first or immediately after critical findings |
 | 3 | `high` | high-priority section |
 | 4 | `medium` | standard finding section |
 | 5 | `low` | lower-priority or appendix |
 
-`review_required` is ranked second because low volume, missing data,
+`insufficient_evidence` is ranked second because low volume, missing data,
 unsupported metrics, or conflicting evidence may require immediate control
 attention even though the severity has not been confirmed.
 
-Do not reinterpret a `review_required` object as `critical`, `high`, or
-another severity. Preserve both fields:
+Do not reinterpret an `insufficient_evidence` object as `critical`, `high`, or
+another severity. Preserve its classification:
 
 ```text
-severity = review_required
-human_review_required = true
+severity = insufficient_evidence
 ```
 
 ## Deterministic tie-breakers
@@ -52,15 +51,14 @@ human_review_required = true
 Within the same severity, rank findings in this order:
 
 1. approved regulatory breach;
-2. human review is required;
-3. extreme z-score result;
-4. IQR high or low outlier;
-5. lower confidence;
-6. lower denominator or population, where the metric exposes one;
-7. larger absolute deviation or magnitude, only if the source object supplies it;
-8. latest period;
-9. domain and metric alphabetically;
-10. group value alphabetically.
+2. extreme z-score result;
+3. IQR high or low outlier;
+4. lower confidence;
+5. lower denominator or population, where the metric exposes one;
+6. larger absolute deviation or magnitude, only if the source object supplies it;
+7. latest period;
+8. domain and metric alphabetically;
+9. group value alphabetically.
 
 The tie-breakers are evidence-ordering controls, not new anomaly classifications.
 Do not rank by an absolute deviation that was not supplied or cannot be
@@ -78,15 +76,15 @@ Place all highlighted anomalies at the beginning of the report in this order:
 3. ranked anomalies;
 4. period comparisons and trend context;
 5. remaining narrative or supporting detail;
-6. methodology and snapshot controls.
+6. methodology and source limitations.
 
 For a recipient profile:
 
 - **Executive**: show at most the five highest-priority findings;
-- **Board**: show critical and review-required findings first;
+- **Board**: show critical and insufficient-evidence findings first;
 - **Risk analyst**: show every verified finding, with evidence columns;
 - **Operations**: show findings affecting actionable segments first;
-- **Regulator**: show all regulatory breaches and review-required findings;
+- **Regulator**: show all regulatory breaches and insufficient-evidence findings;
 - **General**: show the top three findings in plain language.
 
 No anomaly may be moved below unrelated portfolio context merely because the
@@ -108,7 +106,6 @@ Assign a zero-padded rank to each retained finding:
   "group_value": "catalog value",
   "severity": "critical",
   "confidence": "high",
-  "human_review_required": true,
   "headline": "verified concise finding",
   "evidence": {
     "observed_value": 0,
@@ -118,9 +115,7 @@ Assign a zero-padded rank to each retained finding:
     "iqr_status": "not_applicable | not_anomaly | anomaly",
     "regulatory_status": "threshold_unavailable | within_threshold | approaching | breach"
   },
-  "warnings": [],
-  "snapshot_id": "snapshot identifier",
-  "refreshed_at": "ISO-8601 timestamp"
+  "warnings": []
 }
 ```
 
@@ -135,7 +130,7 @@ Examples of structure, not values:
 
 - "Delinquency rate is a high IQR outlier in [group] for [period]."
 - "Approved regulatory threshold is breached for [metric] in [period]."
-- "Fraud exposure requires human review because [specific verified reason]."
+- "Fraud exposure is identified by [specific verified evidence]."
 
 Never copy example values into a report.
 
@@ -150,9 +145,8 @@ When duplicates exist:
 1. retain one source object;
 2. keep the highest severity;
 3. keep the highest confidence;
-4. keep `human_review_required = true` if either object requires review;
-5. merge non-conflicting warnings;
-6. do not merge conflicting snapshot or source metadata.
+4. merge non-conflicting warnings;
+5. do not merge conflicting source metadata.
 
 ## Safeguards: volume and confidence
 
@@ -186,15 +180,13 @@ Send the ranked list to `Generate_Narrative` in this order:
     "trends",
     "remaining_sections",
     "controls"
-  ],
-  "snapshot_id": "snapshot identifier",
-  "refreshed_at": "ISO-8601 timestamp"
+  ]
 }
 ```
 
 The `omitted_by_recipient_limit` field must include any findings not shown due
 to recipient length limits, along with their rank and reason. It must not be
-used to suppress critical or review-required findings for brief recipient
+used to suppress critical or insufficient-evidence findings for brief recipient
 profiles.
 
 ## Forbidden behavior
@@ -218,12 +210,12 @@ Before the report is drafted:
 1. every finding has a source anomaly object;
 2. each severity is valid;
 3. critical findings are first;
-4. review-required findings follow critical findings;
+4. insufficient-evidence findings follow critical findings;
 5. tie-breakers use only supplied evidence;
 6. identical observations are deduplicated;
 7. different periods or MOB ranges remain separate;
 8. regulatory evidence is not inferred;
 9. omitted findings are recorded;
-10. snapshot ID and refresh time are included;
+10. source limitations and warnings are included;
 11. `Key Findings` appears before trends and supporting sections;
 12. no placeholder or example value remains.

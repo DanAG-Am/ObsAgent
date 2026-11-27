@@ -12,6 +12,13 @@ unusable denominators, and source drift.
 This skill assesses and reports quality; it does not repair source values,
 fill nulls, remove duplicates, alter aggregates, or create missing observations.
 
+The current local CSV screening tool implements only selected checks: it
+counts identical full rows and internal MOB gaps within the observed vintage
+range, in addition to structural and reconciliation checks. It does not apply
+business-key duplicate rules, validate expected coverage, or certify aggregate
+quality. In the panel, a user-supplied minimum is applied only at one selected
+MOB; it is not a validated business threshold.
+
 ## Required inputs
 
 Request clarification if any required input is missing:
@@ -25,7 +32,7 @@ Request clarification if any required input is missing:
 7. approved vintage and MOB coverage;
 8. categorical catalog values;
 9. expected row count or snapshot period;
-10. snapshot ID and refreshed-at timestamp.
+10. available source metadata.
 
 Never invent a range, duplicate policy, catalog label, coverage threshold, or
 business rule. Use source policy or return `policy_required`.
@@ -186,7 +193,7 @@ Measure:
 - account and denominator coverage;
 - missing vintage/MOB combinations;
 - duplicate-key coverage;
-- source snapshot freshness.
+- available source coverage information.
 
 Coverage may be incomplete but not invalid. Escalate when:
 
@@ -207,10 +214,9 @@ Check for source drift and internal consistency:
 2. stable categorical labels;
 3. stable row grain;
 4. stable units and currency scale;
-5. stable snapshot refresh cadence;
-6. additive totals match the aggregate grain;
-7. repeated vintage/MOB observations do not change unexpectedly;
-8. denominator definitions remain unchanged between periods.
+5. additive totals match the aggregate grain;
+6. repeated vintage/MOB observations do not change unexpectedly;
+7. denominator definitions remain unchanged between periods.
 
 If the source version or contract changes, label the file
 `schema_changed` or `definition_changed` and require review.
@@ -231,7 +237,7 @@ Use overall status:
 - `passed`: required checks pass and no material issue exists;
 - `warning`: usable but with documented quality limitations;
 - `rejected`: required checks fail or the snapshot may not be published;
-- `review_required`: source policy or result is unresolved.
+- `policy_required`: source policy or result is unresolved.
 
 A `warning` does not justify silently filtering, dropping, or normalizing rows.
 
@@ -262,7 +268,7 @@ Return a structured data-quality result:
 
 ```json
 {
-  "status": "passed | warning | rejected | review_required",
+  "status": "passed | warning | rejected | policy_required",
   "file": "local path or storage reference",
   "row_count": 0,
   "valid_row_count": 0,
@@ -296,10 +302,7 @@ Return a structured data-quality result:
       "message": "specific quality finding"
     }
   ],
-  "warnings": [],
-  "human_review_required": false,
-  "snapshot_id": "snapshot identifier or null",
-  "refreshed_at": "ISO-8601 timestamp or null"
+  "warnings": []
 }
 ```
 
@@ -336,7 +339,7 @@ Before returning the quality result:
 6. vintage and MOB coverage are reported;
 7. denominators and minimum-volume limits are considered;
 8. categorical values are compared only with an approved catalog;
-9. source drift and snapshot freshness are assessed;
+9. available source drift is assessed;
 10. issue severity and overall status are consistent;
-11. human review is triggered for unresolved policy findings;
-12. source rows and snapshot metadata remain intact.
+11. unresolved policy findings are reported;
+12. source rows and available metadata remain intact.

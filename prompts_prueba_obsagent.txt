@@ -4,9 +4,15 @@ Los valores 202401, 202402 y MOB 0, 1, 2 y 6 existen en el CSV local
 revisado. Si la base del servidor es distinta, selecciona valores disponibles
 en el panel de cartera y sustituyelos. Cada prueba es independiente.
 
-La respuesta depende de que el modelo elija correctamente las herramientas.
+Cada consulta completada pasa por el orquestador en Python, el investigador
+y el redactor. El orquestador no es un tercer agente que consulte el modelo.
+Estos prompts buscan que el investigador use herramientas, pero el modelo
+decide si las llama y no se puede garantizar su seleccion.
+
 Revisa "Como se obtuvo esta respuesta" para comprobar los argumentos,
-resultados y errores. No tomes como verificados datos sin evidencia.
+resultados y errores. La interfaz indica que participaron el investigador y
+el redactor, pero no muestra un registro independiente de cada etapa.
+No tomes como verificados datos sin evidencia.
 
 1. SALUDO
 Hola. Explica brevemente que puedes hacer con la cartera local.
@@ -40,8 +46,8 @@ Para la cosecha 202401 y MOB 6, muestra los 5 canales con mayor tasa
 de castigo neto. Incluye la tasa y el numero de cuentas de cada uno.
 
 9. FILTRO POR PRODUCTO
-Para la cosecha 202401, MOB 6 y producto Clasica, calcula la tasa de
-morosidad por monto y muestra el numero de cuentas.
+Para la cosecha 202401 y MOB 6, calcula la tasa de morosidad por monto
+del producto [elige un producto disponible] y muestra el numero de cuentas.
 
 10. MARGEN OPERATIVO
 Para la cosecha 202401 y MOB 6, calcula el margen operativo e indica
@@ -50,12 +56,12 @@ los ingresos y gastos totales utilizados.
 11. POSIBLES ANOMALIAS
 Para la cosecha 202401 y MOB 6, busca productos con valores atipicos
 de tasa de morosidad por monto mediante IQR. Muestra unicamente los
-candidatos encontrados y aclara que requieren revision humana.
+candidatos encontrados y aclara que un valor atipico no prueba fraude.
 
-12. TRADUCCION
-Activa "Traducir consulta antes de analizar" y envia:
+12. CONSULTA EN INGLES
+Envia esta consulta en ingles y comprueba la respuesta en español:
 For vintage 202401 at MOB 6, calculate the amount delinquency rate.
-Revisa en la trazabilidad la consulta traducida y los filtros utilizados.
+Revisa en la trazabilidad los filtros utilizados. Ya no hay traductor separado.
 
 13. CONSULTA DE UNA GUIA DE SKILL
 Consulta la guia Compare_Periods y explica que datos y controles necesita
@@ -68,12 +74,62 @@ verificar un reporte. Indica si la aplicacion puede hacerlo actualmente.
 15. BORRADOR DE REPORTE
 Para la cosecha 202401 y MOB 6, resume la tasa de morosidad por monto
 y la tasa de castigo neto. Indica los datos utilizados y sus limitaciones.
-Despues usa el boton "Descargar PDF de prueba" bajo la respuesta.
-El PDF es un borrador no verificado, no un reporte aprobado.
+Despues usa el boton "Descargar PDF de prueba" o "Descargar Excel de prueba"
+bajo la respuesta. Ambos son borradores no verificados.
 
 16. FILTRO SIN RESULTADOS
 Para la cosecha 190001 y MOB 6, indica si existen datos. Si no existen,
 no inventes indicadores.
+
+PROMPTS PARA PROBAR EL FLUJO Y DISTINTAS HERRAMIENTAS
+
+17. INVESTIGACION Y REDACCION CON CIFRAS
+Para la cosecha 202401 en MOB 6, calcula la tasa de morosidad por monto.
+Explica el resultado en dos frases e incluye el monto vencido y el inscrito.
+Si falta algun dato, indicalo sin inventarlo.
+Pista para la traza: Indicadores de cartera.
+
+18. COMPARACION Y GRAFICA
+Compara la tasa de morosidad por monto de las cosechas 202401 y 202402
+en MOB 6. Indica los dos valores y la diferencia en puntos porcentuales.
+Muestra una grafica si los resultados lo permiten.
+Pista para la traza: Comparacion de cosechas.
+
+19. EVOLUCION
+Para la cosecha 202401, muestra la tasa de castigo neto en MOB 0, 1 y 2.
+Resume los valores sin inventar una tendencia y muestra una grafica si
+los resultados lo permiten.
+Pista para la traza: Evolucion por cosecha.
+
+20. CLASIFICACION DE SEGMENTOS
+Para la cosecha 202401 en MOB 6, ordena los tres productos con mayor
+tasa de morosidad por monto. Indica el valor y las cuentas de cada producto;
+si hay menos de tres resultados, muestralos sin inventar otros.
+Pista para la traza: Clasificacion de segmentos.
+
+21. DICCIONARIO Y DATOS
+Consulta la definicion de ENRAMTS en el diccionario y despues calcula,
+para la cosecha 202401 y MOB 6, la tasa de morosidad por monto junto con
+el monto inscrito. Explica brevemente como se relacionan.
+Pistas para la traza: Consultar diccionario de variables e Indicadores de cartera.
+La definicion depende de que el diccionario local este disponible.
+
+22. PREGUNTA DESDE EL PANEL
+En "Panel de cartera", selecciona la tasa de morosidad por monto,
+la cosecha 202401 y MOB 6. Despues escribe en el chat del panel:
+Explica el indicador y las cuentas que aparecen en la vista actual,
+indicando que cosecha y mes se aplican.
+En la traza, comprueba "Vista del panel al preguntar". El indicador y la
+clasificacion ya se envian como contexto, asi que una herramienta adicional
+puede no ser necesaria. La clasificacion no aplica los filtros de cosecha
+ni MOB; las graficas de evolucion usan todos los MOB de la cosecha elegida.
+
+23. DEMOSTRACION DE FRAUDE SIMULADO
+En "Fraude (demo)", pregunta: Explica que canal tiene una tasa atipica,
+como se calcula y por que esto no demuestra fraude real.
+Comprueba que se identifiquen los datos como inventados y que la vista
+muestre el numerador, denominador y limites. La traza incluye el contexto
+de la vista; no garantiza una llamada adicional a la herramienta.
 
 Para registrar las pruebas, anota el tiempo aproximado, si hubo respuesta,
 las herramientas mostradas y cualquier error. El tiempo puede variar segun

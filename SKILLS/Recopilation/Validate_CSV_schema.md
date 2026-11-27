@@ -7,7 +7,7 @@ schema contract before aggregation or analytical use.
 
 Check encoding, delimiter, header names, data types, date representation,
 numeric values, and required columns. Files that cannot meet the contract
-must be rejected or flagged for human review.
+must be rejected or accompanied by warnings.
 
 This skill validates structure and types; it does not repair or normalize
 source data silently. Semantic and row-quality checks belong to
@@ -26,7 +26,7 @@ Request clarification if any required input is missing:
 7. numeric locale and decimal separator;
 8. maximum file size and maximum row length;
 9. missing-value and duplicate-row policy;
-10. snapshot ID and source metadata.
+10. source metadata when available.
 
 Never infer a required schema or silently rename source columns.
 
@@ -238,9 +238,9 @@ Reject the file if:
 - the file contains a structural binary or NUL corruption;
 - required values are missing.
 
-### Flag for review
+### Flag limitations
 
-Flag a file for human review if:
+Report warnings if:
 
 - unexpected optional columns are present;
 - an unmapped or low-frequency categorical label appears;
@@ -275,7 +275,7 @@ Return a structured schema-validation result:
 
 ```json
 {
-  "status": "passed | rejected | review_required",
+  "status": "passed | rejected | warning",
   "file": "local path or storage reference",
   "encoding": "utf-8 | utf-8-sig | alternate",
   "delimiter": ", | ; | \\t | pipe | unknown",
@@ -286,8 +286,6 @@ Return a structured schema-validation result:
   "row_count": 0,
   "valid_row_count": 0,
   "rejected_row_count": 0,
-  "snapshot_id": "snapshot identifier or null",
-  "refreshed_at": "ISO-8601 timestamp or null",
   "issues": [
     {
       "code": "missing_column | invalid_encoding | invalid_delimiter | invalid_type | invalid_vintage | negative_value | missing_value",
@@ -298,8 +296,7 @@ Return a structured schema-validation result:
       "message": "specific validation message"
     }
   ],
-  "warnings": [],
-  "human_review_required": false
+  "warnings": []
 }
 ```
 
@@ -338,4 +335,4 @@ Before returning the validation result:
 9. rejected rows are counted and identified;
 10. review findings are separate from rejection findings;
 11. the original file is preserved without silent repair;
-12. snapshot and source metadata are retained.
+12. available source metadata is retained.

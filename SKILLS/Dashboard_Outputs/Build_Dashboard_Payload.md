@@ -59,8 +59,7 @@ required to build the requested dashboard is absent:
     those sections are requested.
 7.  **Narrative output**: the generated narrative when an explanatory
     section is requested.
-8.  **Data context**: snapshot ID, refreshed-at timestamp, warnings, and
-    data-quality status.
+8.  **Data context**: warnings and data-quality status.
 9.  **Display preferences**: requested cards, charts, tables, ordering,
     and level of detail, when specified.
 
@@ -75,8 +74,8 @@ Before assembling the payload:
 
 1.  Confirm that every metric and dimension exists in the verified
     source result or approved metric catalog.
-2.  Confirm that all results use the same snapshot context, reporting
-    period, and normalized filters unless the dashboard explicitly
+2.  Confirm that all results use compatible sources, reporting
+    periods, and normalized filters unless the dashboard explicitly
     compares different periods.
 3.  Confirm that units, metric definitions, and formula versions are
     available.
@@ -85,7 +84,7 @@ Before assembling the payload:
 5.  Confirm that period-comparison objects use comparable periods,
     filters, and MOB ranges.
 6.  Confirm that anomaly objects include their method, peer population,
-    severity, warnings, and human-review status.
+    severity and warnings.
 7.  Confirm that narrative text comes from the verified narrative output
     and does not introduce unsupported values.
 8.  Preserve null, missing, unavailable, and not-applicable values as
@@ -163,8 +162,7 @@ respective skills.
     changes.
 -   Preserve trend direction, observation window, and valid observation
     count.
--   Preserve anomaly method, direction, severity, confidence, and
-    human-review requirement.
+-   Preserve anomaly method, direction, severity, confidence, and warnings.
 -   Do not reinterpret a statistical anomaly as confirmed fraud, claims,
     misconduct, or a regulatory breach.
 
@@ -179,8 +177,8 @@ supplied.
 
 Keep warnings visible and machine-readable. At minimum, retain warnings
 about low volume, missing observations, denominator problems, incomplete
-coverage, incompatible comparisons, unavailable metrics, and required
-human review whenever they appear in the upstream results.
+coverage, incompatible comparisons, and unavailable metrics whenever they
+appear in the upstream results.
 
 ## Procedure: output contract
 
@@ -201,8 +199,6 @@ remain consistent with the consuming frontend contract.
   },
   "filters": {},
   "metadata": {
-    "snapshot_id": "snapshot identifier",
-    "refreshed_at": "ISO-8601 timestamp",
     "data_quality_status": "status returned by source",
     "warnings": []
   },
@@ -294,8 +290,7 @@ verified result exists.
     ranges.
 -   Do not infer that a metric is healthy merely because no anomaly
     object was returned.
--   Keep critical findings and human-review requirements visible to the
-    dashboard consumer.
+-   Keep critical findings and warnings visible to the dashboard consumer.
 
 If access authorization or masking status cannot be confirmed, do not
 publish the payload. Return an access-validation error for the workflow
@@ -308,7 +303,6 @@ Return a structured error or warning when:
 -   a required metric or dimension is not in the approved catalog;
 -   the requested period or filters are missing or invalid;
 -   the source query failed or returned an invalid result;
--   required snapshot metadata is absent;
 -   the requested comparison or anomaly output is unavailable;
 -   the result contains incompatible snapshots or filters;
 -   access policy has not been applied or cannot be verified.
@@ -337,7 +331,6 @@ should be able to identify:
 -   the reporting period and normalized filters;
 -   the KPI cards, charts, and tables included;
 -   the analytical sections included;
--   the snapshot ID and refreshed-at timestamp;
 -   warnings, validation errors, and access status.
 
 A successful payload must be traceable to its verified source results.
@@ -353,7 +346,7 @@ Do not:
 -   mix snapshots or incompatible filters;
 -   calculate MoM, YoY, trend, anomaly, or derived-rate values again;
 -   mix percentage-point changes with percentage changes;
--   suppress data-quality, volume, or human-review warnings;
+-   suppress data-quality or volume warnings;
 -   expose sensitive fields or bypass `apply_access_policy`;
 -   claim that no anomaly exists merely because no anomaly result was
     supplied;
@@ -365,7 +358,7 @@ Before returning the payload, verify that:
 
 1.  the dashboard objective and reporting period are explicit;
 2.  every metric and dimension is supported by the verified source;
-3.  filters and snapshot context are consistent;
+3.  filters and source context are consistent;
 4.  KPI values and units match the source;
 5.  derived metrics retain their numerator and denominator metadata;
 6.  charts use valid fields and correctly ordered observations;
@@ -375,6 +368,5 @@ Before returning the payload, verify that:
 9.  narrative text and recommendations come from verified outputs;
 10. missing, unavailable, and invalid results are clearly distinguished;
 11. access policy has been applied and sensitive fields are not exposed;
-12. warnings, data-quality status, snapshot ID, and refresh time are
-    present;
+12. warnings and data-quality status are present;
 13. the payload follows the consuming frontend's JSON contract. \`\`\`

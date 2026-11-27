@@ -148,9 +148,6 @@ vite.config.ts.timestamp-*
 # Turbo Repo
 .turbo
 
-# csv
-.csv
-
 # Python virtual environment
 .venv/
 chroma_data/
@@ -164,3 +161,4 @@ __pycache__/
 
 # macOS
 .DS_Store
+.agents
