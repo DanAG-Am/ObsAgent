@@ -7,6 +7,7 @@ from pathlib import Path
 
 SKILL_ROOT = Path(__file__).resolve().parents[1] / "SKILLS"
 SKILL_FILES = {
+    "Detect_Fraud": "Fraud_Detection/Detect_Fraud.md",
     "Compare_Periods": "Narrative/Compare_Periods.md",
     "Detect_Anomalies": "Narrative/Detect_Anomalies.md",
     "Generate_Narrative": "Narrative/Generate_Narrative.md",

@@ -8,6 +8,7 @@ import os
 from typing import Any
 
 import altair as alt
+import pandas as pd
 import requests
 import streamlit as st
 
@@ -16,7 +17,11 @@ from multi_agent_framework.agent_manager import DEFAULT_CHROMA_PATH
 from multi_agent_framework.draft_report import build_draft_pdf
 from multi_agent_framework.excel_report import build_chat_excel, build_dashboard_excel
 from multi_agent_framework.evaluation import run_synthetic_evaluation
-from multi_agent_framework.fraud_demo import analyze_synthetic_fraud
+from multi_agent_framework.fraud_detection import (
+    MAX_FRAUD_TRANSACTIONS,
+    TRAINING_DATA_PATH,
+    fraud_feature_names,
+)
 from multi_agent_framework.local_validation import validate_local_csv
 from multi_agent_framework.numeric_evidence import numeric_evidence
 from multi_agent_framework.display_labels import (
@@ -295,12 +300,12 @@ def render_conversation(
                     st.warning("El agente no generó una respuesta.")
                     return
                 tool_results = result["research_findings"]["tool_results"]
-                if (dashboard_context and dashboard_context.get("tipo") == "demostracion_sintetica") or any(
-                    call.get("tool") == "analizar_fraude_simulado" for call in tool_results
+                if (dashboard_context and dashboard_context.get("tipo") == "deteccion_fraude_c45") or any(
+                    call.get("tool") == "detectar_fraude" for call in tool_results
                 ):
                     answer = (
-                        "**Demostración con datos inventados; no detecta fraude real ni "
-                        "tiene confiabilidad validada.**\n\n" + answer
+                        "**Las clasificaciones son resultados del modelo C4.5; no "
+                        "confirman fraude ni sustituyen una revisión operativa.**\n\n" + answer
                     )
                 st.markdown(answer)
                 chart = build_response_chart(
@@ -487,7 +492,7 @@ except (RuntimeError, ValueError, requests.exceptions.RequestException) as error
     st.stop()
 
 home_tab, chat_tab, dashboard_tab, fraud_tab, evaluation_tab, capabilities_tab = st.tabs(
-    ["Inicio", "Conversar con ObsAgent", "Panel de cartera", "Fraude (demo)",
+    ["Inicio", "Conversar con ObsAgent", "Panel de cartera", "Detección de fraude",
      "Evaluación sintética", "Cómo funciona"],
     on_change="rerun",
     key="obsagent_tabs",
@@ -640,64 +645,95 @@ with evaluation_tab:
 
 with fraud_tab:
     if fraud_tab.open:
-        st.subheader("Fraude: demostración sintética", icon=":material/biotech:")
-        st.warning(
-            "Todos los datos son inventados. Esta demostración no detecta fraude real "
-            "ni tiene confiabilidad validada; no sirve para tomar decisiones operativas."
-        )
-        fraud = analyze_synthetic_fraud()
-        rows = fraud["resultados"]
-        counts = st.columns(3)
-        counts[0].metric("Canales simulados", len(rows))
-        counts[1].metric("Transacciones simuladas", sum(row["transacciones_simuladas"] for row in rows))
-        counts[2].metric("Canales con valor atípico", sum(row["valor_atipico"] for row in rows))
+        st.subheader("Detección de fraude con C4.5", icon=":material/security:")
         st.caption(
-            "Tasa = incidentes simulados / transacciones simuladas. El límite IQR "
-            f"superior es {fraud['limite_superior']:.2%}; un valor atípico no prueba fraude."
+            "Carga hasta 20 transacciones con las variables del modelo. Si el CSV "
+            "incluye `Class`, esa etiqueta se ignora al clasificar."
         )
-        st.caption(
-            f"Primer cuartil: {fraud['q1']:.2%}; tercer cuartil: {fraud['q3']:.2%}; "
-            f"límite inferior: {fraud['limite_inferior']:.2%}. "
-            "Los límites son estadísticos y pueden quedar fuera del rango de las tasas."
+        if not TRAINING_DATA_PATH.is_file():
+            st.warning(
+                "No se encontró el conjunto de entrenamiento requerido en "
+                f"`{TRAINING_DATA_PATH}`. Agrega ese archivo para habilitar las "
+                "clasificaciones."
+            )
+        uploaded_file = st.file_uploader(
+            "CSV de transacciones",
+            type=["csv"],
+            key="fraud_detection_csv",
         )
-        chart_rows = [
-            {"Canal simulado": row["canal"], "Tasa de incidentes simulados (%)": row["tasa"] * 100}
-            for row in rows
-        ]
-        st.bar_chart(
-            chart_rows, x="Canal simulado", y="Tasa de incidentes simulados (%)",
-            alt="Tasas de incidentes simulados por canal",
-        )
-        st.dataframe(
-            [{
-                "Canal simulado": row["canal"],
-                "Transacciones simuladas": row["transacciones_simuladas"],
-                "Incidentes simulados": row["incidentes_simulados"],
-                "Tasa": f"{row['tasa']:.2%}",
-                "Valor atípico": "Sí" if row["valor_atipico"] else "No",
-            } for row in rows],
-            hide_index=True,
-            alt="Resultados sintéticos por canal",
-        )
-        st.markdown("#### Pregunta sobre la demostración")
-        st.caption(
-            "La pregunta y estos resultados sintéticos se envían al servidor Ollama configurado."
-        )
-        render_conversation(
-            service, "fraud_demo_messages", dashboard_context=fraud,
-            source_path="demostracion_sintetica", widget_prefix="fraud_",
-        )
+        if uploaded_file is not None:
+            try:
+                frame = pd.read_csv(uploaded_file)
+                if "Class" in frame.columns:
+                    frame = frame.drop(columns=["Class"])
+                features = fraud_feature_names()
+                missing = [feature for feature in features if feature not in frame.columns]
+                extra = [column for column in frame.columns if column not in features]
+                if missing or extra:
+                    details = []
+                    if missing:
+                        details.append(f"faltan campos: {', '.join(missing)}")
+                    if extra:
+                        details.append(f"campos no reconocidos: {', '.join(extra)}")
+                    st.error("El CSV no coincide con el esquema del modelo: " + "; ".join(details))
+                elif frame.empty:
+                    st.error("El CSV no contiene transacciones.")
+                elif len(frame) > MAX_FRAUD_TRANSACTIONS:
+                    st.error(
+                        f"El archivo contiene {len(frame)} filas; el límite es "
+                        f"{MAX_FRAUD_TRANSACTIONS} por análisis."
+                    )
+                elif st.button("Analizar transacciones", key="run_fraud_detection"):
+                    try:
+                        transactions = frame.loc[:, features].to_dict(orient="records")
+                        with st.spinner("Entrenando el modelo y analizando transacciones..."):
+                            st.session_state["fraud_detection_result"] = asyncio.run(
+                                service.detect_fraud(transactions)
+                            )
+                    except (OSError, ValueError) as error:
+                        st.error(f"No se pudo analizar el archivo: {error}")
+            except (OSError, ValueError) as error:
+                st.error(f"No se pudo leer el CSV: {error}")
+
+        fraud_result = st.session_state.get("fraud_detection_result")
+        if fraud_result:
+            st.warning(fraud_result["aviso"])
+            st.dataframe(
+                [{
+                    "Transacción": row["transaccion"],
+                    "Clasificación": {
+                        "Fraudulent": "Fraudulenta",
+                        "Suspicious": "Sospechosa",
+                        "Legitimate": "Legítima",
+                    }.get(row["risk_level"], row["risk_level"]),
+                    "Puntuación del modelo": row["fraud_probability"],
+                    "Umbral": row["threshold"],
+                    "Indicadores adicionales": "; ".join(row["risk_reasons"]),
+                } for row in fraud_result["resultados"]],
+                hide_index=True,
+                alt="Clasificaciones de transacciones del modelo C4.5",
+            )
+            for row in fraud_result["resultados"]:
+                with st.expander(f"Explicación de la transacción {row['transaccion']}"):
+                    st.code(row["explanation"])
+            render_conversation(
+                service,
+                "fraud_messages",
+                dashboard_context=fraud_result,
+                source_path="deteccion_c45",
+                widget_prefix="fraud_",
+            )
 
 with dashboard_tab:
     st.subheader("Resumen de cartera", icon=":material/monitoring:")
     st.caption("Selecciona un indicador y explora su distribución por cosecha.")
     if dashboard_tab.open:
         st.button(
-            "Ver demostración de fraude",
-            key="dashboard_fraud_demo",
+            "Abrir detector de fraude",
+            key="dashboard_fraud_detection",
             on_click=select_view,
-            args=("Fraude (demo)",),
-            help="Abrir la demostración con datos inventados; no detecta fraude real.",
+            args=("Detección de fraude",),
+            help="Abrir el detector de transacciones C4.5.",
         )
         try:
             cohorts = load_dashboard_cohorts(chroma_path)

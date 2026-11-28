@@ -1,7 +1,9 @@
 
+from pathlib import Path
+
 import pandas as pd
 
-DATA_PATH = "data/raw/creditcard.csv"
+DATA_PATH = Path(__file__).resolve().parents[1] / "database" / "creditcard.csv"
 
 
 def load_data(remove_duplicates=False):

@@ -53,6 +53,11 @@ class QueryService:
     async def query(self, request: str) -> dict[str, Any]:
         return await self._system.execute(request)
 
+    async def detect_fraud(
+        self, transactions: list[dict[str, Any]]
+    ) -> dict[str, Any]:
+        return await asyncio.to_thread(self._system.detect_fraud, transactions)
+
     def available_tools(self) -> list[dict[str, str]]:
         return [
             {"name": tool.name, "description": tool.description}

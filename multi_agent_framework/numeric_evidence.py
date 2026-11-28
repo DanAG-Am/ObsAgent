@@ -10,7 +10,7 @@ from typing import Any, Iterator
 
 ANALYTICAL_TOOLS = {
     "portfolio_kpis", "cohort_curve", "kpis_by_dimension", "vintage_comparison",
-    "segment_ranking", "anomaly_candidates", "analizar_fraude_simulado",
+    "segment_ranking", "anomaly_candidates", "detectar_fraude",
     "validar_csv_local",
 }
 NON_RATE_METRICS = {"operating_margin", "acquisition_cost_per_account"}
