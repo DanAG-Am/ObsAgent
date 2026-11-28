@@ -176,9 +176,9 @@ def test_dashboard_chat_uses_current_view_and_resets_follow_up_context_on_filter
         assert "¿Y antes?" not in query.await_args_list[-1].args[0]
         assert len(app.session_state["dashboard_messages"]) == 6
         assert not app.exception
-        app.button(key="dashboard_fraud_demo").click().run()
-        assert app.session_state["obsagent_tabs"] == "Fraude (demo)"
-        assert any("no detecta fraude real" in warning.value for warning in app.warning)
+        app.button(key="dashboard_fraud_detection").click().run()
+        assert app.session_state["obsagent_tabs"] == "Detección de fraude"
+        assert any("conjunto de entrenamiento requerido" in warning.value for warning in app.warning)
 
 
 def test_guide_status_uses_concise_available_label():
@@ -526,46 +526,32 @@ def test_comparison_chart_and_spanish_response_are_shown_and_survive_rerun():
         assert any("Gráfica generada" in caption.value for caption in app.caption)
 
 
-def test_synthetic_fraud_view_and_separate_contextual_chat():
-    result = {
-        "final_answer": "El canal F es atípico.",
-        "research_findings": {"tool_results": []},
-    }
+def test_fraud_view_uses_real_detector_and_reports_missing_training_data():
     with (
         patch.object(QueryService, "__init__", return_value=None),
         patch.object(QueryService, "available_tools", return_value=[]),
-        patch.object(QueryService, "query", new_callable=AsyncMock, return_value=result) as query,
-        patch.object(st, "bar_chart", wraps=st.bar_chart) as chart,
     ):
         app_path = Path(__file__).resolve().parents[1] / "streamlit_app.py"
         app = AppTest.from_file(str(app_path), default_timeout=30).run()
-        app.session_state["obsagent_tabs"] = "Fraude (demo)"
+        app.session_state["obsagent_tabs"] = "Detección de fraude"
         app.run()
         assert not app.exception
-        assert any("no detecta fraude real" in warning.value for warning in app.warning)
-        assert any("0.70%" in caption.value for caption in app.caption)
-        assert chart.call_args.args[0][-1]["Tasa de incidentes simulados (%)"] == 2.0
-        app.chat_input(key="fraud_chat_input").set_value("Explica esta vista").run()
-        assert not app.exception
-        request = query.await_args_list[-1].args[0]
-        assert '"tipo": "demostracion_sintetica"' in request
-        assert '"incidentes_simulados": 20' in request
-        assert "no detecta fraude real" in app.session_state["fraud_demo_messages"][-1]["content"]
-        app.run()
-        assert any("no detecta fraude real" in msg.value for msg in app.markdown)
+        assert any(item.value == "Detección de fraude con C4.5" for item in app.subheader)
+        assert any("conjunto de entrenamiento requerido" in warning.value for warning in app.warning)
+        assert not any("datos inventados" in item.value.lower() for item in app.markdown)
         app.session_state["obsagent_tabs"] = "Conversar con ObsAgent"
         app.run()
         assert not app.exception
         assert app.session_state["obsagent_messages"] == []
 
 
-def test_synthetic_tool_result_in_general_chat_keeps_warning():
+def test_fraud_tool_result_in_general_chat_keeps_model_warning():
     result = {
-        "final_answer": "El canal F es atípico.",
+        "final_answer": "El modelo clasificó la transacción como sospechosa.",
         "research_findings": {"tool_results": [{
-            "tool": "analizar_fraude_simulado",
-            "arguments": {},
-            "result": {"tipo": "demostracion_sintetica"},
+            "tool": "detectar_fraude",
+            "arguments": {"transactions": [{"V1": 1.0}]},
+            "result": {"tipo": "deteccion_fraude_c45"},
         }]},
     }
     with (
@@ -576,9 +562,9 @@ def test_synthetic_tool_result_in_general_chat_keeps_warning():
         app_path = Path(__file__).resolve().parents[1] / "streamlit_app.py"
         app = AppTest.from_file(str(app_path), default_timeout=30).run()
         app.button(key="home_chat").click().run()
-        app.chat_input[0].set_value("Analiza el fraude simulado").run()
+        app.chat_input[0].set_value("Analiza esta transacción").run()
         assert not app.exception
-        assert "no detecta fraude real" in app.session_state["obsagent_messages"][-1]["content"]
+        assert "no confirman fraude" in app.session_state["obsagent_messages"][-1]["content"]
 
 
 if __name__ == "__main__":
@@ -596,6 +582,6 @@ if __name__ == "__main__":
     test_trace_displays_spanish_labels_without_modifying_filter_values()
     test_missing_dictionary_warning_is_visible_in_chat()
     test_comparison_chart_and_spanish_response_are_shown_and_survive_rerun()
-    test_synthetic_fraud_view_and_separate_contextual_chat()
-    test_synthetic_tool_result_in_general_chat_keeps_warning()
+    test_fraud_view_uses_real_detector_and_reports_missing_training_data()
+    test_fraud_tool_result_in_general_chat_keeps_model_warning()
     print("Streamlit workspace test passed.")

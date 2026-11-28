@@ -9,7 +9,7 @@ from .variable_dictionary import SOURCE_FIELDS
 
 
 TOOL_LABELS = {
-    "analizar_fraude_simulado": "Analizar fraude simulado",
+    "detectar_fraude": "Detectar fraude con C4.5",
     "validar_csv_local": "Validar el CSV local",
     "consultar_diccionario": "Consultar diccionario de variables",
     "consultar_skill": "Consultar guía",
@@ -66,6 +66,13 @@ FIELD_LABELS = {
     "ultimo_mob": "Último mes", "intervalos_faltantes": "Intervalos intermedios faltantes",
     "desde": "Desde", "hasta": "Hasta",
     "tipo": "Tipo", "metodo": "Método", "unidad_tasa": "Unidad de tasa",
+    "modelo": "Modelo", "transacciones_analizadas": "Transacciones analizadas",
+    "transaccion": "Transacción", "risk_level": "Nivel de riesgo",
+    "fraud_probability": "Puntuación del modelo", "threshold": "Umbral",
+    "risk_reasons": "Indicadores adicionales", "explanation": "Explicación",
+    "decision_path": "Ruta de decisión", "prediction": "Clasificación",
+    "feature": "Variable", "value": "Valor", "condition": "Condición",
+    "branch": "Rama",
     "q1": "Primer cuartil", "q3": "Tercer cuartil",
     "limite_inferior": "Límite inferior", "limite_superior": "Límite superior",
     "resultados": "Resultados", "canal": "Canal", "tasa": "Tasa",
@@ -83,6 +90,7 @@ FIELD_LABELS = {
 }
 
 SKILL_LABELS = {
+    "Detect_Fraud": "Detectar fraude",
     "Compare_Periods": "Comparar periodos", "Detect_Anomalies": "Detectar anomalías",
     "Generate_Narrative": "Generar narrativa", "Highlight_Findings": "Destacar hallazgos",
     "Verify_Numbers": "Verificar cifras",
@@ -146,4 +154,12 @@ def display_trace_value(value: Any, parent: str = "") -> Any:
             return {"guide_only": "Solo guía", "empty": "Vacía", "missing": "No disponible",
                     "rejected": "Rechazado", "issues_found": "Se encontraron incidencias",
                     "checks_completed": "Comprobaciones completadas"}.get(value, value)
+        if parent == "tipo" and value == "deteccion_fraude_c45":
+            return "Detección C4.5"
+        if parent == "risk_level":
+            return {
+                "Fraudulent": "Fraudulenta",
+                "Suspicious": "Sospechosa",
+                "Legitimate": "Legítima",
+            }.get(value, value)
     return value

@@ -8,10 +8,12 @@ from multi_agent_framework.agent_manager import (
     Agent,
     AgentRole,
     BuilderAgent,
+    FraudDetectionAgent,
     MultiAgentSystem,
     ResearcherAgent,
 )
 from multi_agent_framework.evaluation import CASES, assess_result, run_synthetic_evaluation
+from multi_agent_framework.fraud_detection import fraud_feature_names
 from multi_agent_framework.skill_guides import available_skill_guides, read_skill_guide
 from multi_agent_framework.variable_dictionary import (
     SOURCE_FIELDS,
@@ -87,6 +89,25 @@ def test_empty_builder_response_fails_explicitly():
             assert "redactor" in str(error)
         else:
             raise AssertionError("An empty builder response must raise an error")
+
+
+def test_system_registers_fraud_detector_and_exposes_its_tool():
+    source = Mock()
+    aggregates = Mock()
+    aggregates.count.return_value = 1
+    client = Mock()
+    client.get_collection.side_effect = [source, aggregates]
+
+    with patch(
+        "multi_agent_framework.agent_manager.chromadb.PersistentClient",
+        return_value=client,
+    ):
+        system = MultiAgentSystem(chroma_path="unused")
+
+    detector = system._agents[AgentRole.FRAUD_DETECTOR]
+    assert isinstance(detector, FraudDetectionAgent)
+    assert "detectar_fraude" in {tool.name for tool in system.researcher_tools()}
+    assert [tool.name for tool in system.fraud_detector_tools()] == ["detectar_fraude"]
 
 
 def test_researcher_reports_actual_tool_arguments_and_failures():
@@ -166,12 +187,14 @@ def test_synthetic_evaluation_checks_actual_tool_results_and_answer_numbers():
 
 def test_skill_guides_are_allowlisted_and_read_by_section():
     guides = {guide["name"]: guide["status"] for guide in available_skill_guides()}
+    assert guides["Detect_Fraud"] == "guide_only"
     assert guides["Compare_Periods"] == "guide_only"
     assert "Fetch_From_Storage" not in guides
     assert "Human_Review_Flag" not in guides
     researcher = ResearcherAgent(aggregates=object())
     guide_tool = next(tool for tool in researcher.tools if tool.name == "consultar_skill")
     assert "Fetch_From_Storage" not in guide_tool.parameters["properties"]["nombre"]["enum"]
+    assert "Detect_Fraud" in guide_tool.parameters["properties"]["nombre"]["enum"]
     overview = read_skill_guide("Compare_Periods")
     overview_content = overview["content"]
     assert isinstance(overview_content, dict)
@@ -314,26 +337,63 @@ def test_researcher_validates_local_csv_without_accepting_arbitrary_paths():
         raise AssertionError("El modelo no debe poder seleccionar archivos arbitrarios")
 
 
-def test_synthetic_fraud_tool_is_registered_and_uses_no_external_input():
-    researcher = ResearcherAgent(aggregates=object())
-    with patch("multi_agent_framework.agent_manager.chat", side_effect=[
-        {"role": "assistant", "tool_calls": [{"function": {
-            "name": "analizar_fraude_simulado", "arguments": {},
-        }}]},
-        {"role": "assistant", "content": "Demostración sintética."},
-    ]) as model:
-        result = asyncio.run(researcher.execute("Analiza el fraude simulado"))
-    tool = next(tool for tool in researcher.tools if tool.name == "analizar_fraude_simulado")
+def test_fraud_agent_tool_uses_c45_and_is_available_to_researcher():
+    detector = FraudDetectionAgent()
+    researcher = ResearcherAgent(aggregates=object(), fraud_detector=detector)
+    tool = next(tool for tool in researcher.tools if tool.name == "detectar_fraude")
+    feature_names = tool.parameters["properties"]["transactions"]["items"]["required"]
+    transaction = {feature: 1.0 for feature in feature_names}
+    expected = {"tipo": "deteccion_fraude_c45", "resultados": []}
+
+    with (
+        patch(
+            "multi_agent_framework.agent_manager.detect_fraud_transactions",
+            return_value=expected,
+        ) as detect,
+        patch("multi_agent_framework.agent_manager.chat", side_effect=[
+            {"role": "assistant", "tool_calls": [{"function": {
+                "name": "detectar_fraude",
+                "arguments": {"transactions": [transaction]},
+            }}]},
+            {"role": "assistant", "content": "Clasificación del modelo."},
+        ]) as model,
+    ):
+        result = asyncio.run(researcher.execute("Clasifica esta transacción"))
+
     assert tool.parameters["additionalProperties"] is False
-    assert result["tool_results"][0]["result"]["tipo"] == "demostracion_sintetica"
-    assert "Si se pide fraude real" in model.call_args_list[0].args[0][0]["content"]
-    assert tool.execute is not None
-    try:
-        tool.execute(path="/tmp/other.csv")
-    except TypeError:
-        pass
-    else:
-        raise AssertionError("La demostración no debe aceptar fuentes arbitrarias")
+    assert tool.parameters["properties"]["transactions"]["maxItems"] == 20
+    assert result["tool_results"][0]["result"] == expected
+    detect.assert_called_once_with([transaction])
+    assert "detectar_fraude" in {
+        schema["function"]["name"] for schema in model.call_args_list[0].args[1]
+    }
+    assert "predicciones del modelo" in model.call_args_list[0].args[0][0]["content"]
+    assert "analizar_fraude_simulado" not in {
+        schema["function"]["name"] for schema in model.call_args_list[0].args[1]
+    }
+
+
+def test_fraud_tool_reports_missing_training_data():
+    detector = FraudDetectionAgent()
+    researcher = ResearcherAgent(aggregates=object(), fraud_detector=detector)
+    feature_names = fraud_feature_names()
+    transaction = {feature: 1.0 for feature in feature_names}
+    with (
+        patch(
+            "multi_agent_framework.agent_manager.detect_fraud_transactions",
+            side_effect=FileNotFoundError("training CSV is missing"),
+        ),
+        patch("multi_agent_framework.agent_manager.chat", side_effect=[
+            {"role": "assistant", "tool_calls": [{"function": {
+                "name": "detectar_fraude",
+                "arguments": {"transactions": [transaction]},
+            }}]},
+            {"role": "assistant", "content": "No hay datos de entrenamiento."},
+        ]),
+    ):
+        result = asyncio.run(researcher.execute("Clasifica esta transacción"))
+
+    assert result["tool_results"][0]["result"]["error"] == "training CSV is missing"
 
 
 if __name__ == "__main__":
@@ -349,5 +409,6 @@ if __name__ == "__main__":
     test_researcher_includes_dictionary_and_reports_if_unavailable()
     test_researcher_can_request_a_full_dictionary_definition()
     test_researcher_validates_local_csv_without_accepting_arbitrary_paths()
-    test_synthetic_fraud_tool_is_registered_and_uses_no_external_input()
+    test_fraud_agent_tool_uses_c45_and_is_available_to_researcher()
+    test_fraud_tool_reports_missing_training_data()
     print("Agent workflow tests passed.")
