@@ -159,6 +159,10 @@ __pycache__/
 *.py[cod]
 *.pyc
 
+# Fraud detection
+data/raw/
+models/*.joblib
+
 # macOS
 .DS_Store
 .agents
